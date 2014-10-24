@@ -1,11 +1,13 @@
-package io.hypergroup.hyper;
+package io.hypergroup.hyper.context;
 
 import com.squareup.okhttp.OkHttpClient;
 
 import java.util.concurrent.Executor;
 
 import bolts.Task;
-import io.hypergroup.hyper.requests.ConcurrentRequestPool;
+import io.hypergroup.hyper.Hyper;
+import io.hypergroup.hyper.context.cache.HyperCache;
+import io.hypergroup.hyper.context.requests.ConcurrentRequestPool;
 
 /**
  * Encapsulates functionality that is transferred from a Hyper node to the next new Hyper node
@@ -49,7 +51,7 @@ public class HyperContext {
         return mRoot;
     }
 
-    /* default */ void setRoot(Hyper root) {
+    public void setRoot(Hyper root) {
         mRoot = root;
     }
 
@@ -65,7 +67,7 @@ public class HyperContext {
         return mHyperCache;
     }
 
-    /* default */ void setHyperCache(HyperCache hyperCache) {
+    public void setHyperCache(HyperCache hyperCache) {
         mHyperCache = hyperCache;
     }
 

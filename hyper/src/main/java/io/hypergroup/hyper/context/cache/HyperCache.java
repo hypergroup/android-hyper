@@ -1,7 +1,9 @@
-package io.hypergroup.hyper;
+package io.hypergroup.hyper.context.cache;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import io.hypergroup.hyper.Hyper;
 
 /**
  * Wrapper for a map of Key paths to Hyper nodes, used for local caching of Node objects

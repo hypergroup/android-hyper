@@ -1,4 +1,4 @@
-package io.hypergroup.hyper.requests;
+package io.hypergroup.hyper.context.requests;
 
 import com.squareup.okhttp.Response;
 
