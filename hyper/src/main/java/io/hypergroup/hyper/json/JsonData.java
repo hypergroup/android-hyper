@@ -1,10 +1,15 @@
 package io.hypergroup.hyper.json;
 
+import android.text.TextUtils;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import io.hypergroup.hyper.Data;
@@ -94,13 +99,33 @@ public class JsonData implements Data {
     }
 
     @Override
-    public String getHref() throws NoHrefException {
+    public URL getHref(URL relativeHref) throws NoHrefException {
         try {
             // try to get a string named "href"
-            return mData.getString(KEY_HREF);
+            String href = mData.getString(KEY_HREF);
+            // if the href is empty
+            if (TextUtils.isEmpty(href)) {
+                // fail hard
+                throw new NoHrefException("empty href found");
+            }
+            // build a relative url
+            return new URL(relativeHref, href);
         } catch (JSONException ex) {
             // fail with a standardized exception
             throw new NoHrefException("valid href not found", ex);
+        } catch (MalformedURLException ex) {
+            // fail with a standardized exception
+            throw new NoHrefException("invalid href found", ex);
         }
+    }
+
+    @Override
+    public String[] getKeys() {
+        Iterator<String> iKeys = mData.keys();
+        List<String> keys = new ArrayList<String>();
+        while (iKeys.hasNext()) {
+            keys.add(iKeys.next());
+        }
+        return keys.toArray(new String[keys.size()]);
     }
 }

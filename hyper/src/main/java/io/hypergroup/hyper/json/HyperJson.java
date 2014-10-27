@@ -12,13 +12,14 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 
 import io.hypergroup.hyper.Data;
 import io.hypergroup.hyper.Hyper;
-import io.hypergroup.hyper.context.cache.HyperCache;
 import io.hypergroup.hyper.context.HyperContext;
-import io.hypergroup.hyper.exception.DataParseException;
+import io.hypergroup.hyper.context.cache.HyperCache;
 import io.hypergroup.hyper.context.requests.ResponsePackage;
+import io.hypergroup.hyper.exception.DataParseException;
 
 /**
  * hyper+json implementation of hypermedia.
@@ -98,7 +99,7 @@ public class HyperJson extends Hyper {
      * @param url URL that is the root of the hypermedia
      * @return The newly created root Hyper node
      */
-    public static Hyper createRoot(String url) {
+    public static Hyper createRoot(URL url) {
         // bare bones root node
         return createRoot(url, defaultClient());
     }
@@ -112,7 +113,7 @@ public class HyperJson extends Hyper {
      * @param cacheSize Cache size in bytes
      * @return The newly created root Hyper node
      */
-    public static Hyper createCachedRoot(String url, Context context, String cacheDir, long cacheSize) {
+    public static Hyper createCachedRoot(URL url, Context context, String cacheDir, long cacheSize) {
         // use the default client
         OkHttpClient client = defaultClient();
         // apply the cache
@@ -128,29 +129,29 @@ public class HyperJson extends Hyper {
      * @param client Your configured client
      * @return The newly created root Hyper node
      */
-    public static Hyper createRoot(String url, OkHttpClient client) {
+    public static Hyper createRoot(URL url, OkHttpClient client) {
         // Build context
         HyperContext context = new HyperContext.Builder()
                 .setHttpClient(client) // set the client
                 .setHyperCache(new HyperCache()) // set the cache
                 .build(); // build it
         // create the root node
-        Hyper node = new HyperJson(null, url, context);
+        HyperJson node = new HyperJson(null, url, context);
         // don't forget to set the root
         context.setRoot(node);
         return node;
     }
 
-    /* default */ HyperJson(String keyPath, String href, HyperContext context) {
+    /* default */ HyperJson(String keyPath, URL href, HyperContext context) {
         super(keyPath, href, context);
     }
 
-    /* default */ HyperJson(String keyPath, Data data, HyperContext context) {
-        super(keyPath, data, context);
+    /* default */ HyperJson(String keyPath, URL relativeHref, Data data, HyperContext context) {
+        super(keyPath, relativeHref, data, context);
     }
 
     @Override
-    protected Request buildRequest(String href) {
+    protected Request buildRequest(URL href) {
         return new Request.Builder()
                 .url(mHref)
                 .addHeader(HEADER_ACCEPT, ACCEPT_HYPER_JSON)// accept and prefer hyper+json
@@ -177,8 +178,8 @@ public class HyperJson extends Hyper {
     }
 
     @Override
-    protected Hyper createHyperNodeFromData(String keyPath, Data data) {
-        return new HyperJson(keyPath, data, getContext());
+    protected Hyper createHyperNodeFromData(String keyPath, URL relativeHref, Data data) {
+        return new HyperJson(keyPath, relativeHref, data, getContext());
     }
 
     @Override

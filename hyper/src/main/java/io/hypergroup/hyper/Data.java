@@ -1,5 +1,6 @@
 package io.hypergroup.hyper;
 
+import java.net.URL;
 import java.util.List;
 
 import io.hypergroup.hyper.exception.InvalidCollectionException;
@@ -42,6 +43,11 @@ public interface Data {
      * @return The href for wrapped data, null if it is null
      * @throws io.hypergroup.hyper.exception.NoHrefException When the href property is missing entirely, raise an exception
      */
-    public String getHref() throws NoHrefException;
+    public URL getHref(URL base) throws NoHrefException;
+
+    /**
+     * Retrieve the list of keys for this data
+     */
+    public String[] getKeys();
 
 }

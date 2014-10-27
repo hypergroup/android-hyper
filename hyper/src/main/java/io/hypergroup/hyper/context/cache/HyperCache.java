@@ -38,9 +38,8 @@ public class HyperCache {
      * @return Hyper instance or null
      */
     public Hyper get(String keyPath) {
-        Hyper node = mMap.get(keyPath);
-        //Log.v("HyperCache", ">>> " + keyPath + ": " + (node == null ? null : node.getHref()));
-        return node;
+        //Log.v("HyperCache", "get " + keyPath + ": " + mMap.get(keyPath));
+        return mMap.get(keyPath);
     }
 
     /**
@@ -51,7 +50,7 @@ public class HyperCache {
     public void save(Hyper node) {
         String keyPath = node.getKeyPath();
         mMap.put(keyPath, node);
-        //Log.v("HyperCache", "<<< " + keyPath + ": " + node.getHref());
+        //Log.v("HyperCache", "set " + keyPath + ": " + node);
     }
 
     /**

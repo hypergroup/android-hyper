@@ -7,6 +7,7 @@ import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -15,14 +16,14 @@ import bolts.Continuation;
 import bolts.Task;
 import io.hypergroup.hyper.context.HyperContext;
 import io.hypergroup.hyper.context.cache.HyperCache;
+import io.hypergroup.hyper.context.requests.ConcurrentRequestPool;
+import io.hypergroup.hyper.context.requests.ResponsePackage;
 import io.hypergroup.hyper.exception.DataParseException;
 import io.hypergroup.hyper.exception.IndexErrorException;
 import io.hypergroup.hyper.exception.InvalidCollectionException;
 import io.hypergroup.hyper.exception.MissingPropertyException;
 import io.hypergroup.hyper.exception.NoHrefException;
 import io.hypergroup.hyper.exception.WrongDatatypeException;
-import io.hypergroup.hyper.context.requests.ConcurrentRequestPool;
-import io.hypergroup.hyper.context.requests.ResponsePackage;
 
 /**
  * Hyper node.
@@ -47,7 +48,7 @@ public abstract class Hyper {
     /**
      * Href of this object. Used for fetching
      */
-    protected String mHref;
+    protected URL mHref;
 
     /**
      * Whether or not data has been fetched
@@ -75,11 +76,11 @@ public abstract class Hyper {
      * @param href    URL to act as the href of this node
      * @param context Context of this hyper node
      */
-    public Hyper(String keyPath, String href, HyperContext context) {
+    public Hyper(String keyPath, URL href, HyperContext context) {
         mKeyPath = keyPath;
         mHref = href;
         mContext = context;
-        save();
+        saveToCache();
     }
 
     /**
@@ -88,16 +89,16 @@ public abstract class Hyper {
      * @param data    Initial data. More can be fetched if the data provided has an href
      * @param context Context of this hyper node
      */
-    public Hyper(String keyPath, Data data, HyperContext context) {
+    public Hyper(String keyPath, URL relativeHref, Data data, HyperContext context) {
         mKeyPath = keyPath;
         try {
-            mHref = data.getHref();
+            mHref = data.getHref(relativeHref);
         } catch (NoHrefException e) {
             mHref = null;
         }
         setData(data);
         mContext = context;
-        save();
+        saveToCache();
     }
 
     /**
@@ -138,22 +139,41 @@ public abstract class Hyper {
         // Extract key information
         final KeyPath parsed = new KeyPath(keyPath);
 
+        if (!shouldFetchForKey(parsed.nodeKey)) {
+            return getPropertyTask(keyPath, parsed.nodeKey);
+        }
+
         // ## Cache
 
         // check for a cached version
-        Task<T> cachedTask = getCachedTask(keyPath);
-        // if the task is there,
-        if (cachedTask != null) {
-            // we have a cached object.
-            // return the task that is wrapping it
-            return cachedTask;
+        Hyper cached = getCachedNode(keyPath);
+        if (cached != null) {
+            // If the cached item exists
+            // Compare our destination path to the cached path
+            String fullPath = getConcatenatedKeyPath(keyPath);
+            String foundPath = cached.getKeyPath();
+            // if this is the node we are looking for
+            if (cached == this && fullPath.equals(foundPath)) {
+                return Task.forResult((T) this);
+            } else if (cached != this) {
+                // it they're the same, return a task for that node
+                if (fullPath.equals(foundPath)) {
+                    return Task.forResult((T) cached);
+                } else {
+                    // otherwise
+                    // get the remaining path
+                    String remainingPath = fullPath.substring(foundPath.length() + 1, fullPath.length());
+                    // return the get task from the deepest node we have and the remaining parts
+                    return cached.get(remainingPath);
+                }
+            }
         }
 
         // ## Fetch
 
         // Ensure that our results are fetched
         Task<Data> fetchTask;
-        if (shouldFetchKey(parsed.nodeKey)) {
+        if (shouldFetchForKey(parsed.nodeKey)) {
             // perform the actual fetch in a task
             fetchTask = getFetchTask();
         } else {
@@ -178,9 +198,9 @@ public abstract class Hyper {
                     } else {
                         // single key
                         // path down the new key path for this object
-                        String keyPath = getConcatenatedKeyPath(parsed.nodeKey);
+                        String fullPath = getConcatenatedKeyPath(parsed.nodeKey);
                         // create the task
-                        return getPropertyTask(keyPath, parsed.nodeKey);
+                        return getPropertyTask(fullPath, parsed.nodeKey);
                     }
                 }
             }
@@ -273,7 +293,7 @@ public abstract class Hyper {
                                 // path down the new key path for this object
                                 String keyPath = getConcatenatedKeyPath(nodeKey);
                                 // create the new node
-                                value = createHyperNodeFromData(keyPath, (Data) value);
+                                value = createHyperNodeFromData(keyPath, mHref, (Data) value);
                             }
 
                             // ## Coerce
@@ -297,43 +317,16 @@ public abstract class Hyper {
                 return null;
             }
         });
-
-
         return result.getTask();
-    }
-
-    /**
-     * Attempt to retrieve a Hyper node from the cache, if applicable
-     *
-     * @param keyPath Relative node path to retrieve
-     * @param <T>     Type of Object that you are expecting to get (Hyper)
-     * @return A task or null
-     */
-    protected <T> Task<T> getCachedTask(String keyPath) {
-        // get the node from cache
-        Hyper node = getCachedNode(keyPath);
-        // if we have a node
-        if (node != null) {
-            // try to return a task for it
-            try {
-                // return success
-                return Task.forResult((T) node);
-            } catch (ClassCastException ex) {
-                // return error state
-                return Task.forError(new WrongDatatypeException(ex));
-            }
-        }
-        // return nothing!
-        return null;
     }
 
     /**
      * Get a node from cache by relative keyPath
      *
-     * @param keyPath Relative key path to get from the cache
+     * @param key Relative key path to get from the cache
      * @return The Hyper node if found, otherwise null
      */
-    protected Hyper getCachedNode(String keyPath) {
+    protected Hyper getCachedNode(String key) {
         // get the cache
         HyperCache cache = getContext().getHyperCache();
         // if we don't have a cache
@@ -343,25 +336,25 @@ public abstract class Hyper {
         }
 
         // start with the whole key-path
-        String subpath = getConcatenatedKeyPath(keyPath);
+        String subPath = getConcatenatedKeyPath(key);
 
         // find the end-most cached item
         while (true) {
             // get a node at that path
-            Hyper node = cache.get(subpath);
+            Hyper node = cache.get(subPath);
             // if it exits
             if (node != null) {
                 return node;
             }
-            // get the next subpath or abort
-            int lastIndexOfDot = subpath.lastIndexOf('.');
+            // get the next subPath or abort
+            int lastIndexOfDot = subPath.lastIndexOf('.');
             // if no more dots
             if (lastIndexOfDot == -1) {
                 // abort!
                 return null;
             }
             // trim off last key
-            subpath = subpath.substring(0, lastIndexOfDot);
+            subPath = subPath.substring(0, lastIndexOfDot);
         }
     }
 
@@ -397,55 +390,69 @@ public abstract class Hyper {
     /**
      * Retrieve a property that exists directly on this Hyper node.
      *
-     * @param key Key of the property to get
-     * @param <T> Type of Object that you are expecting to get
+     * @param fullPath Absolute node path to retrieve
+     * @param key      Key of the property to get
+     * @param <T>      Type of Object that you are expecting to get
      * @return A Task for the type of object you are expecting to get. See {@link #get} for more
      * information about the Task.
      */
-    protected <T> Task<T> getPropertyTask(String keyPath, String key) {
+    protected <T> Task<T> getPropertyTask(String fullPath, String key) {
         Task<T>.TaskCompletionSource result = Task.create();
-        getFetchedProperty(keyPath, result, key);
+        getFetchedProperty(fullPath, result, key);
         return result.getTask();
     }
 
     /**
      * Fetch a property from the underlying data source.
      *
-     * @param result Result resource to which errors and success are saved to
-     * @param key    Key of the property to retrieve
-     * @param <T>    Type of Object that you are expecting to get
+     * @param fullPath Absolute node path to retrieve
+     * @param result   Result resource to which errors and success are saved to
+     * @param key      Key of the property to retrieve
+     * @param <T>      Type of Object that you are expecting to get
      */
-    protected <T> void getFetchedProperty(String keyPath, Task<T>.TaskCompletionSource result, String key) {
+    protected <T> void getFetchedProperty(String fullPath, Task<T>.TaskCompletionSource result, String key) {
         // if we are dealing a numeric key
         Integer index = asIndex(key);
         if (index != null) {
             // get the item from the collection at the given index
-            getItemFromCollection(keyPath, result, index);
+            getItemFromCollection(fullPath, result, index);
         } else {
             // otherwise we are dealing with a property at a given key
-            getPropertyFromData(keyPath, result, key);
+            getPropertyFromData(fullPath, result, key);
         }
     }
 
     /**
      * Retrieve a property directly from the underlying Data
      *
-     * @param result Result resource to which errors and success are saved to
-     * @param key    Key of the property to retrieve
-     * @param <T>    Type of Object that you are expecting to get
+     * @param fullPath Absolute node path to retrieve
+     * @param result   Result resource to which errors and success are saved to
+     * @param key      Key of the property to retrieve
+     * @param <T>      Type of Object that you are expecting to get
      */
-    protected <T> void getPropertyFromData(String keyPath, Task<T>.TaskCompletionSource result, String key) {
+    protected <T> void getPropertyFromData(String fullPath, Task<T>.TaskCompletionSource result, String key) {
         Object value;
         try {
             // attempt to extract the key
-            value = getData().getProperty(key);
+
+            // attempt to retrieved cached node so that we do not have to create another
+            Hyper cached = getCachedNode(fullPath);
+            if (cached != null && fullPath.equals(cached.getKeyPath())) {
+                value = (T) cached;
+            } else {
+                value = getData().getProperty(key);
+            }
+        } catch (ClassCastException ex) {
+            // got a hyper node from the cache when we were asking for something else
+            result.setError(new WrongDatatypeException(ex));
+            return;
         } catch (MissingPropertyException e) {
             // no mapping found, save an error and exit
             result.setError(e);
             return;
         }
         // turn our value into something meaningful and save it to the results
-        hyperify(keyPath, result, value);
+        hyperify(fullPath, result, value);
     }
 
     /**
@@ -460,11 +467,12 @@ public abstract class Hyper {
     /**
      * Retrieve a property directly from the underlying "collection" Data
      *
-     * @param result Result resource to which errors and success are saved to
-     * @param index  Index of the item you are trying to get
-     * @param <T>    Type of Object that you are expecting to get
+     * @param fullPath Absolute node path to retrieve
+     * @param result   Result resource to which errors and success are saved to
+     * @param index    Index of the item you are trying to get
+     * @param <T>      Type of Object that you are expecting to get
      */
-    protected <T> void getItemFromCollection(String keyPath, Task<T>.TaskCompletionSource result, int index) {
+    protected <T> void getItemFromCollection(String fullPath, Task<T>.TaskCompletionSource result, int index) {
 
         // ## Collection
 
@@ -511,7 +519,7 @@ public abstract class Hyper {
         // ## Clean
 
         // turn our value into something meaningful and save it to the results
-        hyperify(keyPath, result, value);
+        hyperify(fullPath, result, value);
     }
 
 
@@ -522,8 +530,8 @@ public abstract class Hyper {
      * fetching is complete.
      */
     protected Task<Data> getFetchTask() {
-        String href = getHref();
-        if (TextUtils.isEmpty(href)) {
+        URL href = getHref();
+        if (href == null) {
             // no href to fetch for, return error state
             return Task.forError(new NoHrefException("Attempting to fetch data without an \"href\""));
         } else {
@@ -548,7 +556,7 @@ public abstract class Hyper {
         // and the request pool
         ConcurrentRequestPool pool = context.getConcurrentRequestPool();
         // and our href
-        String href = getHref();
+        URL href = getHref();
         // build a request to the href
         Request request = buildRequest(href);
         // using our pool, make a request, and then use the response to build Data
@@ -592,7 +600,7 @@ public abstract class Hyper {
      * @param key Key to test whether or not a fetch is required for
      */
 
-    protected boolean shouldFetchKey(String key) {
+    protected boolean shouldFetchForKey(String key) {
         // if we've already fetched
         if (isFetched()) {
             // we do not need to fetch
@@ -612,13 +620,15 @@ public abstract class Hyper {
     /**
      * Convert JSONObjects to Hyper nodes and test that the value of an object is the same type that
      * we are expecting to get.
+     * <br/>
+     * WrongDatatypeException When T does not match up with the type of `value`
      *
-     * @param result Result resource to which errors and success are saved to
-     * @param value  Fetched value to coerce as an expected type
-     * @param <T>    Type of Object that you are expecting to get
-     * @throws WrongDatatypeException When T does not match up with the type of `value`
+     * @param fullPath Absolute node path to coerce
+     * @param result   Result resource to which errors and success are saved to
+     * @param value    Fetched value to coerce as an expected type
+     * @param <T>      Type of Object that you are expecting to get
      */
-    protected <T> void hyperify(String keyPath, Task<T>.TaskCompletionSource result, Object value) {
+    protected <T> void hyperify(String fullPath, Task<T>.TaskCompletionSource result, Object value) {
         if (value == null) {
             // null object null result, save and exit
             result.setResult(null);
@@ -628,10 +638,10 @@ public abstract class Hyper {
                 // turn that raw data into something meaningful
                 Data data = createDataFromRawData(value);
                 // put that data in a meaningful hyper node
-                value = createHyperNodeFromData(keyPath, data);
+                value = createHyperNodeFromData(fullPath, mHref, data);
             } else if (value instanceof Data) {
                 // put that data in a meaningful hyper node
-                value = createHyperNodeFromData(keyPath, (Data) value);
+                value = createHyperNodeFromData(fullPath, mHref, (Data) value);
             }
             // The TRUE VALUE of value, as the expected type
             T trueValue;
@@ -676,7 +686,7 @@ public abstract class Hyper {
     /**
      * Save this Hyper node in the cache, if applicable
      */
-    protected void save() {
+    protected void saveToCache() {
         HyperCache cache = getContext().getHyperCache();
         if (cache != null) {
             cache.save(this);
@@ -686,7 +696,7 @@ public abstract class Hyper {
     /**
      * Retrieve the underlying data source for this Hyper node
      */
-    protected Data getData() {
+    public Data getData() {
         return mData;
     }
 
@@ -719,7 +729,7 @@ public abstract class Hyper {
     /**
      * @return Return the href this Hyper node sits at
      */
-    public String getHref() {
+    public URL getHref() {
         return mHref;
     }
 
@@ -778,10 +788,56 @@ public abstract class Hyper {
         return KeyPath.concat(getKeyPath(), key);
     }
 
-//    @Override
-//    public String toString() {
-//        return "(" + getFriendlyKeyPath() + ") @ " + getHref();
-//    }
+    /**
+     * Get the keys available on this Hyper node.
+     *
+     * @return An array of String keys or null if there is no data.
+     */
+    public String[] getAvailableKeys() {
+        Data data = getData();
+        if (data != null) {
+            return data.getKeys();
+        }
+        return null;
+    }
+
+    /**
+     * Fetch this Hyper node's data. Does not make a network request if this Hyper node has already
+     * been fetched.
+     *
+     * @return A Task that may have either an error or a result, which is this instance.
+     */
+    public Task<Hyper> fetch() {
+        // if we've already fetched
+        if (isFetched()) {
+            // return self
+            return Task.forResult(this);
+        } else {
+            // otherwise do the real fetch
+            final Task<Hyper>.TaskCompletionSource result = Task.create();
+            getFetchTask().continueWith(new Continuation<Data, Void>() {
+                @Override
+                public Void then(Task<Data> task) throws Exception {
+                    // if there is an error
+                    if (task.isFaulted()) {
+                        // save error state
+                        result.setError(task.getError());
+                    } else {
+                        // save success state
+                        result.setResult(Hyper.this);
+                    }
+                    return null;
+                }
+            });
+            // return the task
+            return result.getTask();
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "Hyper." + getFriendlyKeyPath();
+    }
 
     /**
      * Build a request for retrieving an href.
@@ -791,7 +847,7 @@ public abstract class Hyper {
      * @param href URL to retrieve
      * @return The request that will be used to pull data from the remote server.
      */
-    protected abstract Request buildRequest(String href);
+    protected abstract Request buildRequest(URL href);
 
     /**
      * Parse a response into Data
@@ -818,7 +874,7 @@ public abstract class Hyper {
      * @param data    Base data for the new node
      * @return The new Hyper node
      */
-    protected abstract Hyper createHyperNodeFromData(String keyPath, Data data);
+    protected abstract Hyper createHyperNodeFromData(String keyPath, URL relativeHref, Data data);
 
     /**
      * Create Data from raw data (for example, JSONObject)

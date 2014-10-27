@@ -97,17 +97,28 @@ public class ConcurrentRequestPool {
      * @return A new {@code Task<ResponsePackage>} being executed with the given Executor
      */
     protected Task<ResponsePackage> createResponseTask(final OkHttpClient client, final Executor executor, final Request request) {
+
+        final Task<ResponsePackage>.TaskCompletionSource result = Task.create();
+
         Task<ResponsePackage> responseTask = Task.call(new Callable<ResponsePackage>() {
             @Override
             public ResponsePackage call() throws Exception {
-                // log outgoing
-                Log.v(TAG, ">>> " + request.urlString());
-                // get a response
-                Response response = client.newCall(request).execute();
-                // log incoming
-                Log.v(TAG, "<<< " + request.urlString());
-                // return that result
-                return new ResponsePackage(response);
+                try {
+                    // log outgoing
+                    Log.v(TAG, ">>> " + request.urlString());
+                    // get a response
+                    Response response = client.newCall(request).execute();
+                    // log incoming
+                    Log.v(TAG, "<<< " + request.urlString());
+                    // return that result
+                    ResponsePackage responsePackage = new ResponsePackage(response);
+                    result.setResult(responsePackage);
+                    return responsePackage;
+                } catch (Exception ex) {
+                    Log.e(TAG, "Unexpected error", ex);
+                    result.setError(ex);
+                }
+                return null;
             }
         }, executor);
         // after that is done, we need to remove the {@code Task<String>} from the pool
@@ -119,7 +130,7 @@ public class ConcurrentRequestPool {
                 return null;
             }
         });
-        return responseTask;
+        return result.getTask();
     }
 
     /**
