@@ -91,31 +91,35 @@ public class JsonData implements Data {
                 }
                 return items;
             } catch (JSONException indexError) {
+                // un-hittable, theoretically
                 throw new InvalidCollectionException("Index error while parsing collection", indexError);
             }
         } else {
-            throw new InvalidCollectionException("null collection");
+            return new ArrayList<Object>();
         }
     }
 
     @Override
     public URL getHref(URL relativeHref) throws NoHrefException {
         try {
+            if (mData.has(KEY_HREF) && mData.isNull(KEY_HREF)) {
+                throw new NoHrefException("Found null href");
+            }
             // try to get a string named "href"
             String href = mData.getString(KEY_HREF);
             // if the href is empty
             if (TextUtils.isEmpty(href)) {
-                // fail hard
-                throw new NoHrefException("empty href found");
+                // empty href
+                return relativeHref;
             }
             // build a relative url
             return new URL(relativeHref, href);
         } catch (JSONException ex) {
             // fail with a standardized exception
-            throw new NoHrefException("valid href not found", ex);
+            throw new NoHrefException("Valid href not found", ex);
         } catch (MalformedURLException ex) {
             // fail with a standardized exception
-            throw new NoHrefException("invalid href found", ex);
+            throw new NoHrefException("Invalid href found", ex);
         }
     }
 

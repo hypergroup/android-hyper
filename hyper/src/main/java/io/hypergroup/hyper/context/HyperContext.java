@@ -107,8 +107,8 @@ public class HyperContext {
     public static class Builder {
 
         private Hyper mRoot;
-        private OkHttpClient mHttpClient;
-        private HyperCache mHyperCache;
+        private OkHttpClient mHttpClient = null;
+        private HyperCache mHyperCache = null;
         private Executor mNetworkExecutor = NETWORK_EXECUTOR;
         private Executor mAsyncExecutor = ASYNC_EXECUTOR;
         private ConcurrentRequestPool mConcurrentRequestPool = new ConcurrentRequestPool();
@@ -162,12 +162,28 @@ public class HyperContext {
 
         public HyperContext build() {
             HyperContext context = new HyperContext();
-            context.setHttpClient(mHttpClient);
             context.setRoot(mRoot);
-            context.setHyperCache(mHyperCache);
             context.setNetworkExecutor(mNetworkExecutor);
-            context.setConcurrentRequestPool(mConcurrentRequestPool);
             context.setAsyncExecutor(mAsyncExecutor);
+
+            OkHttpClient client = mHttpClient;
+            if (client == null) {
+                client = new OkHttpClient();
+            }
+            context.setHttpClient(client);
+
+            HyperCache cache = mHyperCache;
+            if (cache == null) {
+                cache = new HyperCache();
+            }
+            context.setHyperCache(cache);
+
+            ConcurrentRequestPool pool = mConcurrentRequestPool;
+            if (pool == null) {
+                pool = new ConcurrentRequestPool();
+            }
+            context.setConcurrentRequestPool(pool);
+
             return context;
         }
     }

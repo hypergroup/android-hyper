@@ -1,6 +1,13 @@
-package io.hypergroup.hyper;
+package io.hypergroup.hyper.json;
 
 public class JsonFiles {
+
+    public static final class BASICS {
+        public static final String EMPTY = "{}";
+        public static final String NULL_COLLECTION = "{\"collection\":null}";
+        public static final String NULL_HREF = "{\"href\":null}";
+        public static final String EMPTY_HREF = "{\"href\":\"\"}";
+    }
 
     public static final class ROOT {
         public static final String URL = "/api";

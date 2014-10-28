@@ -40,8 +40,9 @@ public interface Data {
     /**
      * Retrieve the href for wrapped data
      *
-     * @return The href for wrapped data, null if it is null
-     * @throws io.hypergroup.hyper.exception.NoHrefException When the href property is missing entirely, raise an exception
+     * @param base Base URL, context for the new URL
+     * @return The href for wrapped data
+     * @throws io.hypergroup.hyper.exception.NoHrefException When the href property is missing entirely or null.
      */
     public URL getHref(URL base) throws NoHrefException;
 

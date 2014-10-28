@@ -9,10 +9,8 @@ import com.squareup.okhttp.Response;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
-import bolts.Continuation;
 import bolts.Task;
 
 /**
@@ -32,7 +30,7 @@ public class ConcurrentRequestPool {
      * <br/>
      * ex: mPool.get("GET").get("http://example.com/foo")
      */
-    private Map<String, Map<String, Task<ResponsePackage>>> mPool = new ConcurrentHashMap<String, Map<String, Task<ResponsePackage>>>();
+    private Map<String, Map<String, Task<ResponsePackage>>> mPool = new HashMap<String, Map<String, Task<ResponsePackage>>>();
 
     /**
      * Construct this bad boy
@@ -48,7 +46,7 @@ public class ConcurrentRequestPool {
      * @param request  The actual request to make
      * @return A Task containing the response body. This may or may not be a new promise.
      */
-    public Task<ResponsePackage> getResponseTask(final OkHttpClient client, final Executor executor, Request request) {
+    public synchronized Task<ResponsePackage> getResponseTask(final OkHttpClient client, final Executor executor, Request request) {
         Task<ResponsePackage> responseTask = getCurrentRequestTask(request);
         // if it doesn't exist
         if (responseTask == null) {
@@ -97,12 +95,11 @@ public class ConcurrentRequestPool {
      * @return A new {@code Task<ResponsePackage>} being executed with the given Executor
      */
     protected Task<ResponsePackage> createResponseTask(final OkHttpClient client, final Executor executor, final Request request) {
-
         final Task<ResponsePackage>.TaskCompletionSource result = Task.create();
-
-        Task<ResponsePackage> responseTask = Task.call(new Callable<ResponsePackage>() {
+        Task.call(new Callable<Void>() {
             @Override
-            public ResponsePackage call() throws Exception {
+            public Void call() throws Exception {
+                ResponsePackage responsePackage = null;
                 try {
                     // log outgoing
                     Log.v(TAG, ">>> " + request.urlString());
@@ -111,25 +108,17 @@ public class ConcurrentRequestPool {
                     // log incoming
                     Log.v(TAG, "<<< " + request.urlString());
                     // return that result
-                    ResponsePackage responsePackage = new ResponsePackage(response);
-                    result.setResult(responsePackage);
-                    return responsePackage;
+                    responsePackage = new ResponsePackage(response);
                 } catch (Exception ex) {
                     Log.e(TAG, "Unexpected error", ex);
                     result.setError(ex);
+                } finally {
+                    removeResponseTask(request.method(), request.urlString());
+                    result.trySetResult(responsePackage);
                 }
                 return null;
             }
         }, executor);
-        // after that is done, we need to remove the {@code Task<String>} from the pool
-        responseTask.continueWith(new Continuation<ResponsePackage, Void>() {
-            @Override
-            public Void then(Task<ResponsePackage> task) throws Exception {
-                // call to remove the request
-                removeResponseTask(request.method(), request.urlString());
-                return null;
-            }
-        });
         return result.getTask();
     }
 
@@ -140,7 +129,7 @@ public class ConcurrentRequestPool {
      * @param url    Url key
      * @param task   Task to store
      */
-    protected void saveResponseTask(String method, String url, Task<ResponsePackage> task) {
+    protected synchronized void saveResponseTask(String method, String url, Task<ResponsePackage> task) {
         getRequestMapByMethod(method).put(url, task);
     }
 
@@ -150,7 +139,7 @@ public class ConcurrentRequestPool {
      * @param method Method key
      * @param url    Url key
      */
-    protected Task<ResponsePackage> removeResponseTask(String method, String url) {
+    protected synchronized Task<ResponsePackage> removeResponseTask(String method, String url) {
         return getRequestMapByMethod(method).remove(url);
     }
 }

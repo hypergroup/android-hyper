@@ -1,4 +1,4 @@
-package io.hypergroup.hyper;
+package io.hypergroup.hyper.json;
 
 import com.squareup.okhttp.mockwebserver.MockResponse;
 import com.squareup.okhttp.mockwebserver.MockWebServer;
@@ -10,10 +10,12 @@ import java.util.List;
 
 import bolts.Continuation;
 import bolts.Task;
+import io.hypergroup.hyper.Data;
+import io.hypergroup.hyper.Hyper;
+import io.hypergroup.hyper.exception.IndexErrorException;
 import io.hypergroup.hyper.exception.InvalidCollectionException;
 import io.hypergroup.hyper.exception.MissingPropertyException;
 import io.hypergroup.hyper.exception.NoHrefException;
-import io.hypergroup.hyper.json.HyperJson;
 
 public class HyperJsonTest extends TestCase {
 
@@ -575,6 +577,44 @@ public class HyperJsonTest extends TestCase {
         // test data
         assertEquals("/api/users/1", friend1.getHref().getPath());
         assertSame("friend1 == friend2", friend1, friend2);
+
+        // shut down the server
+        server.shutdown();
+
+    }
+
+    public void testCollectionItemIndexOOB() throws Exception {
+
+        // Create a mock server
+        MockWebServer server = new MockWebServer();
+        server.enqueue(new MockResponse().setBody(JsonFiles.FRIENDS.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET)); // extra in case of failure
+        server.play();
+
+        // Create our root node using the mock server
+        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1")));
+        Task<Hyper> fetchTask = root.fetchAsync();
+        fetchTask.waitForCompletion();
+
+        assertFalse(fetchTask.isFaulted());
+        assertNull(fetchTask.getError());
+        assertNotNull(fetchTask.getResult());
+
+        Exception error = null;
+        try {
+            root.get("1000");
+        } catch (Exception ex) {
+            error = ex;
+        }
+
+        // test requests
+        assertEquals(1, server.getRequestCount());
+        RecordedRequest request1 = server.takeRequest();
+        assertEquals(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"), request1.getPath());
+
+        // test data
+        assertNotNull(error);
+        assertSame(error.getClass(), IndexErrorException.class);
 
         // shut down the server
         server.shutdown();

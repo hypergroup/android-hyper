@@ -1,23 +1,16 @@
 package io.hypergroup.hyper.json;
 
-import android.content.Context;
-import android.util.Log;
-
-import com.squareup.okhttp.Cache;
-import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 
 import io.hypergroup.hyper.Data;
 import io.hypergroup.hyper.Hyper;
 import io.hypergroup.hyper.context.HyperContext;
-import io.hypergroup.hyper.context.cache.HyperCache;
 import io.hypergroup.hyper.context.requests.ResponsePackage;
 import io.hypergroup.hyper.exception.DataParseException;
 
@@ -56,44 +49,6 @@ public class HyperJson extends Hyper {
     private static final String ACCEPT_ANY = "*/*; q=0";
 
     /**
-     * Tag used for logging
-     */
-    private static final String TAG = HyperJson.class.getSimpleName();
-
-    /**
-     * Construct a default http client
-     */
-    private static OkHttpClient defaultClient() {
-        // the default client is bare-bones
-        return new OkHttpClient();
-    }
-
-    /**
-     * Construct a cache for OkHttp
-     *
-     * @param context      Context to find a suitable cache directory for
-     * @param cacheDirName Cache sub-directory name
-     * @param cacheSize    Cache size in bytes
-     * @return A new cache or null if the operation fails
-     */
-    private static Cache createCache(Context context, String cacheDirName, long cacheSize) {
-        // Create an HTTP cache in the application cache directory.
-        Cache cache = null;
-        // the cache sub directory is located under the context's cache directory
-        File cacheDir = new File(context.getCacheDir(), cacheDirName);
-        try {
-            // attempt to create a cache
-            cache = new Cache(cacheDir, cacheSize);
-        } catch (IOException e) {
-            // log warning on failure, not having a cache is not necessarily an app-breaking thing
-            // this behavior is potentially unwanted, but the benefits of not having random devices
-            // breaking because of odd drivers (I'm looking at you Samsung) outweighs the cost, IMO
-            Log.w(TAG, "Unable to create disk cache.", e);
-        }
-        return cache;
-    }
-
-    /**
      * Create a new root HyperJson node at the given URL
      *
      * @param url URL that is the root of the hypermedia
@@ -101,44 +56,22 @@ public class HyperJson extends Hyper {
      */
     public static Hyper createRoot(URL url) {
         // bare bones root node
-        return createRoot(url, defaultClient());
-    }
-
-    /**
-     * Create a new root HyperJson node at the given url that also caches requests to disk
-     *
-     * @param url       URL that is the root of the hypermedia
-     * @param context   Context to find a suitable cache directory for
-     * @param cacheDir  Cache sub-directory name
-     * @param cacheSize Cache size in bytes
-     * @return The newly created root Hyper node
-     */
-    public static Hyper createCachedRoot(URL url, Context context, String cacheDir, long cacheSize) {
-        // use the default client
-        OkHttpClient client = defaultClient();
-        // apply the cache
-        client.setCache(createCache(context, cacheDir, cacheSize));
-        // return a node
-        return createRoot(url, client);
+        return createRoot(url, (new HyperContext.Builder()).build());
     }
 
     /**
      * Create a new root HyperJson node at the given url with your http client
      *
-     * @param url    URL that is the root of the hypermedia
-     * @param client Your configured client
+     * @param url          URL that is the root of the hypermedia
+     * @param hyperContext Your configured HyperContext
      * @return The newly created root Hyper node
      */
-    public static Hyper createRoot(URL url, OkHttpClient client) {
+    public static Hyper createRoot(URL url, HyperContext hyperContext) {
         // Build context
-        HyperContext context = new HyperContext.Builder()
-                .setHttpClient(client) // set the client
-                .setHyperCache(new HyperCache()) // set the cache
-                .build(); // build it
         // create the root node
-        HyperJson node = new HyperJson(null, url, context);
+        HyperJson node = new HyperJson(null, url, hyperContext);
         // don't forget to set the root
-        context.setRoot(node);
+        hyperContext.setRoot(node);
         return node;
     }
 
