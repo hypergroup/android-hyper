@@ -136,10 +136,14 @@ public abstract class Hyper {
      */
     public <T> Task<T> get(final String keyPath) {
 
+
+        Log.d(TAG, "get: " + keyPath);
+
         // Extract key information
         final KeyPath parsed = new KeyPath(keyPath);
 
         if (!shouldFetchForKey(parsed.nodeKey)) {
+            Log.d(TAG, "!shouldFetchForKey: " + parsed.nodeKey);
             return getPropertyTask(keyPath, parsed.nodeKey);
         }
 
@@ -154,16 +158,19 @@ public abstract class Hyper {
             String foundPath = cached.getKeyPath();
             // if this is the node we are looking for
             if (cached == this && fullPath.equals(foundPath)) {
+                Log.d(TAG, "cached == this && fullPath.equals(foundPath): " + keyPath);
                 return Task.forResult((T) this);
             } else if (cached != this) {
                 // it they're the same, return a task for that node
                 if (fullPath.equals(foundPath)) {
+                    Log.d(TAG, "fullPath.equals(foundPath): " + keyPath);
                     return Task.forResult((T) cached);
                 } else {
                     // otherwise
                     // get the remaining path
                     String remainingPath = fullPath.substring(foundPath.length() + 1, fullPath.length());
                     // return the get task from the deepest node we have and the remaining parts
+                    Log.d(TAG, "remainingPath: " + remainingPath);
                     return cached.get(remainingPath);
                 }
             }
@@ -188,18 +195,21 @@ public abstract class Hyper {
                 // if there was an error with fetching
                 if (task.isFaulted()) {
                     // pass on the fetch error
+                    Log.d(TAG, "fault: " + keyPath);
                     return Task.forError(task.getError());
                 } else {
                     // if fetching went ok
                     // return a property task
                     if (parsed.isMultikey()) {
                         // complex path
+                        Log.d(TAG, "getDeepPropertyTask: " + keyPath);
                         return getDeepPropertyTask(parsed.nodeKey, parsed.nextKey);
                     } else {
                         // single key
                         // path down the new key path for this object
                         String fullPath = getConcatenatedKeyPath(parsed.nodeKey);
                         // create the task
+                        Log.d(TAG, "fullPath: " + keyPath);
                         return getPropertyTask(fullPath, parsed.nodeKey);
                     }
                 }
