@@ -58,10 +58,10 @@ public class MainActivity extends Activity {
         final Hyper collectionRootB = HyperJson.createRoot(new URL("http://private-4bbf0-hyperexperimental.apiary-mock.com/api/users"));
 
 
-        collectionRootA.<Hyper>get("0").continueWith(new Continuation<Hyper, Void>() {
+        collectionRootA.<Hyper>getAsync("0").continueWith(new Continuation<Hyper, Void>() {
             @Override
             public Void then(final Task<Hyper> a) throws Exception {
-                collectionRootA.<Hyper>get("0").continueWith(new Continuation<Hyper, Void>() {
+                collectionRootA.<Hyper>getAsync("0").continueWith(new Continuation<Hyper, Void>() {
                     @Override
                     public Void then(final Task<Hyper> b) throws Exception {
                         if (a.isFaulted()) {
@@ -78,10 +78,10 @@ public class MainActivity extends Activity {
             }
         });
 
-        collectionRootA.<Hyper>get("0").continueWith(new Continuation<Hyper, Void>() {
+        collectionRootA.<Hyper>getAsync("0").continueWith(new Continuation<Hyper, Void>() {
             @Override
             public Void then(final Task<Hyper> a) throws Exception {
-                collectionRootA.<Hyper>get("0").continueWith(new Continuation<Hyper, Void>() {
+                collectionRootA.<Hyper>getAsync("0").continueWith(new Continuation<Hyper, Void>() {
                     @Override
                     public Void then(final Task<Hyper> b) throws Exception {
                         if (a.isFaulted()) {
@@ -98,10 +98,10 @@ public class MainActivity extends Activity {
             }
         });
 
-        collectionRootA.<Hyper>get("0").continueWith(new Continuation<Hyper, Void>() {
+        collectionRootA.<Hyper>getAsync("0").continueWith(new Continuation<Hyper, Void>() {
             @Override
             public Void then(final Task<Hyper> a) throws Exception {
-                collectionRootA.<Hyper>get("0").continueWith(new Continuation<Hyper, Void>() {
+                collectionRootA.<Hyper>getAsync("0").continueWith(new Continuation<Hyper, Void>() {
                     @Override
                     public Void then(final Task<Hyper> b) throws Exception {
                         if (a.isFaulted()) {
@@ -118,10 +118,10 @@ public class MainActivity extends Activity {
             }
         });
 
-        collectionRootA.<Hyper>get("0").continueWith(new Continuation<Hyper, Void>() {
+        collectionRootA.<Hyper>getAsync("0").continueWith(new Continuation<Hyper, Void>() {
             @Override
             public Void then(final Task<Hyper> a) throws Exception {
-                collectionRootA.<Hyper>get("0").continueWith(new Continuation<Hyper, Void>() {
+                collectionRootA.<Hyper>getAsync("0").continueWith(new Continuation<Hyper, Void>() {
                     @Override
                     public Void then(final Task<Hyper> b) throws Exception {
                         if (a.isFaulted()) {
@@ -139,10 +139,10 @@ public class MainActivity extends Activity {
         });
 
 
-        collectionRootB.each().continueWith(new Continuation<List<Object>, Void>() {
+        collectionRootB.eachAsync(true).continueWith(new Continuation<List<Object>, Void>() {
             @Override
             public Void then(final Task<List<Object>> a) throws Exception {
-                collectionRootB.each().continueWith(new Continuation<List<Object>, Void>() {
+                collectionRootB.eachAsync(true).continueWith(new Continuation<List<Object>, Void>() {
                     @Override
                     public Void then(final Task<List<Object>> b) throws Exception {
                         if (a.isFaulted()) {

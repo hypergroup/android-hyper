@@ -18,6 +18,7 @@ public class HyperContext {
      * Default executor for network requests
      */
     public static final Executor NETWORK_EXECUTOR = Task.BACKGROUND_EXECUTOR;
+    public static final Executor ASYNC_EXECUTOR = Task.BACKGROUND_EXECUTOR;
 
     /**
      * Root node
@@ -43,6 +44,11 @@ public class HyperContext {
      * Executor for network requests
      */
     private Executor mNetworkExecutor;
+
+    /**
+     * Executor for async fetch task
+     */
+    private Executor mAsyncExecutor;
 
     /* default */ HyperContext() {
     }
@@ -79,6 +85,14 @@ public class HyperContext {
         mNetworkExecutor = networkExecutor;
     }
 
+    public Executor getAsyncExecutor() {
+        return mAsyncExecutor;
+    }
+
+    public void setAsyncExecutor(Executor AsyncExecutor) {
+        mAsyncExecutor = AsyncExecutor;
+    }
+
     public ConcurrentRequestPool getConcurrentRequestPool() {
         return mConcurrentRequestPool;
     }
@@ -96,6 +110,7 @@ public class HyperContext {
         private OkHttpClient mHttpClient;
         private HyperCache mHyperCache;
         private Executor mNetworkExecutor = NETWORK_EXECUTOR;
+        private Executor mAsyncExecutor = ASYNC_EXECUTOR;
         private ConcurrentRequestPool mConcurrentRequestPool = new ConcurrentRequestPool();
 
         //private HyperCache mHyperCache;
@@ -137,6 +152,14 @@ public class HyperContext {
             return this;
         }
 
+        /**
+         * Override the default Fetch Executor
+         */
+        public Builder setAsyncExecutor(Executor AsyncExecutor) {
+            mAsyncExecutor = AsyncExecutor;
+            return this;
+        }
+
         public HyperContext build() {
             HyperContext context = new HyperContext();
             context.setHttpClient(mHttpClient);
@@ -144,6 +167,7 @@ public class HyperContext {
             context.setHyperCache(mHyperCache);
             context.setNetworkExecutor(mNetworkExecutor);
             context.setConcurrentRequestPool(mConcurrentRequestPool);
+            context.setAsyncExecutor(mAsyncExecutor);
             return context;
         }
     }

@@ -3,24 +3,24 @@ package io.hypergroup.hyper.exception;
 /**
  * When a Task expects a specific type but find another
  */
-public class WrongDatatypeException extends HyperException {
+public class WrongDataTypeException extends HyperException {
 
-    public WrongDatatypeException() {
+    public WrongDataTypeException() {
     }
 
-    public WrongDatatypeException(String message) {
+    public WrongDataTypeException(String message) {
         super(message);
     }
 
-    public WrongDatatypeException(Exception cause) {
+    public WrongDataTypeException(Exception cause) {
         super(cause);
     }
 
-    public WrongDatatypeException(String message, Exception cause) {
+    public WrongDataTypeException(String message, Exception cause) {
         super(message, cause);
     }
 
-    public WrongDatatypeException(ClassCastException cause) {
+    public WrongDataTypeException(ClassCastException cause) {
         super("Encountered unexpected data type", cause);
     }
 }

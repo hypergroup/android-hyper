@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 
 import bolts.Continuation;
@@ -23,7 +24,7 @@ import io.hypergroup.hyper.exception.IndexErrorException;
 import io.hypergroup.hyper.exception.InvalidCollectionException;
 import io.hypergroup.hyper.exception.MissingPropertyException;
 import io.hypergroup.hyper.exception.NoHrefException;
-import io.hypergroup.hyper.exception.WrongDatatypeException;
+import io.hypergroup.hyper.exception.WrongDataTypeException;
 
 /**
  * Hyper node.
@@ -102,373 +103,186 @@ public abstract class Hyper {
     }
 
     /**
-     * Get a value for a key path.
-     * <p/>
-     * example key paths:
+     * Get a keyPath property in the form of a dot-notation.
      * <br/>
-     * current_user
-     * <br/>
-     * current_user.company
-     * <br/>
-     * current_user.avatar.default.url
-     * <br/>
-     * current_user.friends.0.avatar.default.url
-     * <br/>
+     * ex.
+     * <pre>
+     *     current_user.first_name
+     *     current_user.display_name
+     *     current_user.friends
+     *     current_user.friends.0
+     *     current_user.friends.0.first_name
+     *     current_user.friends.0.display_name
+     *     current_user.friends.0.groups.0.name
+     * </pre>
      *
-     * @param keyPath keyPath to search through this node.
-     * @param <T>     Type of Object that you are expecting to get
-     * @return A Task for the type of object you are expecting to get. Typical types are Hyper,
-     * String, and boxed primitives.
-     * <br/>
-     * You could receive special error conditions from Hyper.
-     * <br/>
-     * HyperException
-     * <br/>
-     * NoHrefException
-     * <br/>
-     * MissingPropertyException
-     * <br/>
-     * IndexErrorException
-     * <br/>
-     * InvalidCollectionException
-     * <br/>
-     * WrongDatatypeException
+     * @param keyPath Key path to retrieve
+     * @param <T>     Expected type to retrieve
+     * @return The fetched type
+     * @throws InterruptedException       Network fetch was interrupted
+     * @throws NoHrefException            When fetching deep-links, if there is a missing link between nodes, this error will occur
+     * @throws IndexErrorException        When fetching a specific index from a collection but that index does not exist
+     * @throws MissingPropertyException   When fetching a property that doesn't exist
+     * @throws InvalidCollectionException When fetching from a collection that doesn't exist or in an unexpected format
+     * @throws WrongDataTypeException     When fetching an object that doesn't have the same class as the specified type T
+     * @see #getAsync(String)
      */
-    public <T> Task<T> get(final String keyPath) {
+    public <T> T get(final String keyPath) throws InterruptedException, NoHrefException, IndexErrorException, MissingPropertyException, InvalidCollectionException, WrongDataTypeException {
 
-
-        Log.d(TAG, "get: " + keyPath);
-
-        // Extract key information
+        // ## Parse Key
         final KeyPath parsed = new KeyPath(keyPath);
 
+        // ## If we already have it
         if (!shouldFetchForKey(parsed.nodeKey)) {
-            Log.d(TAG, "!shouldFetchForKey: " + parsed.nodeKey);
-            return getPropertyTask(keyPath, parsed.nodeKey);
+            return getProperty(parsed);
         }
 
         // ## Cache
-
-        // check for a cached version
-        Hyper cached = getCachedNode(keyPath);
+        Hyper cached = getImmediateCachedNode(parsed.nodeKey);
         if (cached != null) {
-            // If the cached item exists
-            // Compare our destination path to the cached path
-            String fullPath = getConcatenatedKeyPath(keyPath);
-            String foundPath = cached.getKeyPath();
-            // if this is the node we are looking for
-            if (cached == this && fullPath.equals(foundPath)) {
-                Log.d(TAG, "cached == this && fullPath.equals(foundPath): " + keyPath);
-                return Task.forResult((T) this);
-            } else if (cached != this) {
-                // it they're the same, return a task for that node
-                if (fullPath.equals(foundPath)) {
-                    Log.d(TAG, "fullPath.equals(foundPath): " + keyPath);
-                    return Task.forResult((T) cached);
-                } else {
-                    // otherwise
-                    // get the remaining path
-                    String remainingPath = fullPath.substring(foundPath.length() + 1, fullPath.length());
-                    // return the get task from the deepest node we have and the remaining parts
-                    Log.d(TAG, "remainingPath: " + remainingPath);
-                    return cached.get(remainingPath);
-                }
+            if (parsed.isMultiKey()) {
+                return cached.get(parsed.nextKey);
             }
         }
 
         // ## Fetch
-
-        // Ensure that our results are fetched
-        Task<Data> fetchTask;
         if (shouldFetchForKey(parsed.nodeKey)) {
-            // perform the actual fetch in a task
-            fetchTask = getFetchTask();
-        } else {
-            // empty fetch task, pretend it is done
-            fetchTask = Task.forResult(null);
+            performNetworkFetch();
         }
 
-        // after fetching is complete, we are ready to get our property out of the underlying data
-        return fetchTask.continueWithTask(new Continuation<Data, Task<T>>() {
-            @Override
-            public Task<T> then(Task<Data> task) throws Exception {
-                // if there was an error with fetching
-                if (task.isFaulted()) {
-                    // pass on the fetch error
-                    Log.d(TAG, "fault: " + keyPath);
-                    return Task.forError(task.getError());
-                } else {
-                    // if fetching went ok
-                    // return a property task
-                    if (parsed.isMultikey()) {
-                        // complex path
-                        Log.d(TAG, "getDeepPropertyTask: " + keyPath);
-                        return getDeepPropertyTask(parsed.nodeKey, parsed.nextKey);
-                    } else {
-                        // single key
-                        // path down the new key path for this object
-                        String fullPath = getConcatenatedKeyPath(parsed.nodeKey);
-                        // create the task
-                        Log.d(TAG, "fullPath: " + keyPath);
-                        return getPropertyTask(fullPath, parsed.nodeKey);
-                    }
-                }
-            }
-        });
+        return getProperty(parsed);
     }
+
 
     /**
      * Retrieve each item in this Hyper node's collection
+     * <br/>
+     * <pre>
+     *     links.&lt;Object&gt;each()
+     *     users.&lt;Hyper&gt;each()
+     *     scores.&lt;Integer&gt;each()
+     * </pre>
      *
      * @param <T> Type of Objects that you are expecting to get
-     * @return A Task with a list of objects
+     * @return The list of objects from the given collection in the given format
+     * @throws InterruptedException       Network fetch was interrupted
+     * @throws NoHrefException            When fetching deep-links, if there is a missing link between nodes, this error will occur
+     * @throws InvalidCollectionException When fetching from a collection that doesn't exist or in an unexpected format
+     * @throws WrongDataTypeException     When fetching an object that doesn't have the same class as the specified type T
+     * @see #eachAsync(boolean)
      */
-    public <T> Task<List<T>> each() {
-        // Un-refactored and dirty.
-
-        // Our results
-        final Task<List<T>>.TaskCompletionSource result = Task.create();
-
+    public <T> List<T> each() throws InterruptedException, NoHrefException, InvalidCollectionException, WrongDataTypeException {
         // ## Fetch
 
         // Ensure that our results are fetched
-        Task<Data> fetchTask;
         if (!isFetched()) {
-            // perform the actual fetch in a task
-            fetchTask = getFetchTask();
-        } else {
-            // empty fetch task, pretend it is done
-            fetchTask = Task.forResult(null);
+            performNetworkFetch();
         }
 
-        fetchTask.continueWith(new Continuation<Data, Void>() {
-            @Override
-            public Void then(Task<Data> task) throws Exception {
-                if (task.isFaulted()) {
-                    // save error state
-                    result.setError(task.getError());
-                } else {
+        // ## Use our collection
+        List<Object> collection = getCollection();
 
-                    // ## Collection
+        // ## Each Item
 
-                    // acquire the collection or error out and exit
-                    List<Object> collection;
-                    try {
-                        // try to get the collection
-                        collection = getCollection();
-                    } catch (InvalidCollectionException ex) {
-                        // save the error state
-                        result.setError(ex);
-                        // exit
-                        return null;
-                    }
+        int N = collection.size();
+        // list to save entries to
 
-                    // ## Each Item
+        final List<T> items = new ArrayList<T>(N);
+        for (int index = 0; index < N; index++) {
 
-                    // prepare to build the list
-                    // flag to not save results if we had an error
-                    boolean err = false;
-                    // size of our collection
-                    int N = collection.size();
-                    // list to save entries to
-                    final List<T> items = new ArrayList<T>(N);
-                    for (int index = 0; index < N; index++) {
+            // ## Item
 
-                        // ## Item
-
-                        // get the value from the collection
-                        Object value = collection.get(index);
-                        // if its null
-                        if (value == null) {
-                            // save a null
-                            items.add(null);
-                        } else {
-
-                            // ## Cache
-
-                            // Build the key
-                            String nodeKey = String.valueOf(index);
-                            // check for a cached version
-                            Object cachedValue = getCachedNode(nodeKey);
-                            // if the item exists naturally, and we have a cached version,
-                            if (cachedValue != null) {
-                                // use the cached version
-                                value = cachedValue;
-                            }
-
-                            // ## Hyper node
-
-                            // if it is Data, save a Hyper
-                            if (value instanceof Data) {
-                                // path down the new key path for this object
-                                String keyPath = getConcatenatedKeyPath(nodeKey);
-                                // create the new node
-                                value = createHyperNodeFromData(keyPath, mHref, (Data) value);
-                            }
-
-                            // ## Coerce
-
-                            // coerce to the expected else fail
-                            try {
-                                items.add((T) value);
-                            } catch (ClassCastException ex) {
-                                // save error state and stop
-                                result.setError(new WrongDatatypeException(ex));
-                                err = true;
-                                break;
-                            }
-                        }
-                    }
-                    // if we didn't have an error, save the results
-                    if (!err) {
-                        result.setResult(items);
-                    }
-                }
-                return null;
-            }
-        });
-        return result.getTask();
-    }
-
-    /**
-     * Get a node from cache by relative keyPath
-     *
-     * @param key Relative key path to get from the cache
-     * @return The Hyper node if found, otherwise null
-     */
-    protected Hyper getCachedNode(String key) {
-        // get the cache
-        HyperCache cache = getContext().getHyperCache();
-        // if we don't have a cache
-        if (cache == null) {
-            // exit, we can't do anything
-            return null;
-        }
-
-        // start with the whole key-path
-        String subPath = getConcatenatedKeyPath(key);
-
-        // find the end-most cached item
-        while (true) {
-            // get a node at that path
-            Hyper node = cache.get(subPath);
-            // if it exits
-            if (node != null) {
-                return node;
-            }
-            // get the next subPath or abort
-            int lastIndexOfDot = subPath.lastIndexOf('.');
-            // if no more dots
-            if (lastIndexOfDot == -1) {
-                // abort!
-                return null;
-            }
-            // trim off last key
-            subPath = subPath.substring(0, lastIndexOfDot);
-        }
-    }
-
-    /**
-     * Create a task will fetch properties of a sub-node.
-     * This function serves as the main recurvise component for the traversal algorithm.
-     * It acquires a hyper-node with "nodeKey" and then continues to traverse down the remaining
-     * keyPath but using the "get" function that originally created this task.
-     *
-     * @param nodeKey    The key of the sub-node to extract properties from
-     * @param newKeyPath The sub-node's keyPath to extract properties from
-     * @param <T>        Type of Object that you are expecting to get
-     */
-    protected <T> Task<T> getDeepPropertyTask(String nodeKey, final String newKeyPath) {
-        // key path
-        // get the underlying node
-        return get(nodeKey).continueWithTask(new Continuation<Object, Task<T>>() {
-            @Override
-            public Task<T> then(Task<Object> task) throws Exception {
-                // if getting the node fell apart
-                if (task.isFaulted()) {
-                    // pass on the error
-                    return Task.forError(task.getError());
-                } else {
-                    // otherwise use that new node to get the next parts in the key path
-                    return ((Hyper) task.getResult()).get(newKeyPath);
-                }
-            }
-        });
-    }
-
-
-    /**
-     * Retrieve a property that exists directly on this Hyper node.
-     *
-     * @param fullPath Absolute node path to retrieve
-     * @param key      Key of the property to get
-     * @param <T>      Type of Object that you are expecting to get
-     * @return A Task for the type of object you are expecting to get. See {@link #get} for more
-     * information about the Task.
-     */
-    protected <T> Task<T> getPropertyTask(String fullPath, String key) {
-        Task<T>.TaskCompletionSource result = Task.create();
-        getFetchedProperty(fullPath, result, key);
-        return result.getTask();
-    }
-
-    /**
-     * Fetch a property from the underlying data source.
-     *
-     * @param fullPath Absolute node path to retrieve
-     * @param result   Result resource to which errors and success are saved to
-     * @param key      Key of the property to retrieve
-     * @param <T>      Type of Object that you are expecting to get
-     */
-    protected <T> void getFetchedProperty(String fullPath, Task<T>.TaskCompletionSource result, String key) {
-        // if we are dealing a numeric key
-        Integer index = asIndex(key);
-        if (index != null) {
-            // get the item from the collection at the given index
-            getItemFromCollection(fullPath, result, index);
-        } else {
-            // otherwise we are dealing with a property at a given key
-            getPropertyFromData(fullPath, result, key);
-        }
-    }
-
-    /**
-     * Retrieve a property directly from the underlying Data
-     *
-     * @param fullPath Absolute node path to retrieve
-     * @param result   Result resource to which errors and success are saved to
-     * @param key      Key of the property to retrieve
-     * @param <T>      Type of Object that you are expecting to get
-     */
-    protected <T> void getPropertyFromData(String fullPath, Task<T>.TaskCompletionSource result, String key) {
-        Object value;
-        try {
-            // attempt to extract the key
-
-            // attempt to retrieved cached node so that we do not have to create another
-            Hyper cached = getCachedNode(fullPath);
-            if (cached != null && fullPath.equals(cached.getKeyPath())) {
-                value = (T) cached;
+            // get the value from the collection
+            Object value = collection.get(index);
+            // if its null
+            if (value == null) {
+                // save a null
+                items.add(null);
             } else {
-                value = getData().getProperty(key);
+
+                // ## Cache
+                String relativePath = String.valueOf(index);
+
+                // check for a cached version
+                Object cachedValue = getImmediateCachedNode(relativePath);
+                // if the item exists naturally, and we have a cached version,
+                if (cachedValue != null) {
+                    // use the cached version
+                    value = cachedValue;
+                }
+
+                // ## Coerce
+                value = coerce(relativePath, value);
+
+                // coerce to the expected else fail
+                try {
+                    items.add((T) value);
+                } catch (ClassCastException ex) {
+                    // save error state and stop
+                    throw new WrongDataTypeException(ex);
+                }
             }
-        } catch (ClassCastException ex) {
-            // got a hyper node from the cache when we were asking for something else
-            result.setError(new WrongDatatypeException(ex));
-            return;
-        } catch (MissingPropertyException e) {
-            // no mapping found, save an error and exit
-            result.setError(e);
-            return;
+        }
+        // if we didn't have an error, save the results
+        return items;
+    }
+
+    /**
+     * Retrieve an individual property, recursively acquiring the property as needed
+     *
+     * @param keyPath Key path to retrieve
+     * @param <T>     Expected type to retrieve
+     * @return The value of the property retrieved at the given key path
+     * @throws InterruptedException       Network fetch was interrupted
+     * @throws NoHrefException            When fetching deep-links, if there is a missing link between nodes, this error will occur
+     * @throws IndexErrorException        When fetching a specific index from a collection but that index does not exist
+     * @throws MissingPropertyException   When fetching a property that doesn't exist
+     * @throws InvalidCollectionException When fetching from a collection that doesn't exist or in an unexpected format
+     * @throws WrongDataTypeException     When fetching an object that doesn't have the same class as the specified type T
+     */
+    protected <T> T getProperty(KeyPath keyPath) throws NoHrefException, InterruptedException, WrongDataTypeException, MissingPropertyException, IndexErrorException, InvalidCollectionException {
+        if (keyPath.isMultiKey()) {
+            return ((Hyper) get(keyPath.nodeKey)).get(keyPath.nextKey);
+        } else {
+            // if we are dealing a numeric nodeKey
+            Integer index = asIndex(keyPath.nodeKey);
+            if (index != null) {
+                // get the item from the collection at the given index
+                return getItemFromCollection(keyPath, index);
+            } else {
+                // otherwise we are dealing with a property at a given nodeKey
+                return getPropertyFromData(keyPath);
+            }
+        }
+    }
+
+    /**
+     * Retrieve a property directly from underlying data
+     *
+     * @param keyPath Key path to retrieve
+     * @param <T>     Expected type to retrieve
+     * @return Retrieved property
+     * @throws MissingPropertyException When fetching a property that doesn't exist
+     * @throws WrongDataTypeException   When fetching an object that doesn't have the same class as the specified type T
+     */
+    protected <T> T getPropertyFromData(KeyPath keyPath) throws MissingPropertyException, WrongDataTypeException {
+        Object value;
+        // attempt to retrieved cached node so that we do not have to create another
+        Hyper cached = getImmediateCachedNode(keyPath.nodeKey);
+        if (cached != null) {
+            value = cached;
+        } else {
+            value = getData().getProperty(keyPath.nodeKey);
         }
         // turn our value into something meaningful and save it to the results
-        hyperify(fullPath, result, value);
+        return coerce(keyPath.relativePath, value);
     }
 
     /**
      * Retrieve the underlying collection of the Hyper node
      *
-     * @return The collection.
+     * @return A list of objects from the underlying collection
+     * @throws InvalidCollectionException When fetching from a collection that doesn't exist or in an unexpected format
      */
     protected List<Object> getCollection() throws InvalidCollectionException {
         return getData().getCollection();
@@ -477,26 +291,20 @@ public abstract class Hyper {
     /**
      * Retrieve a property directly from the underlying "collection" Data
      *
-     * @param fullPath Absolute node path to retrieve
-     * @param result   Result resource to which errors and success are saved to
-     * @param index    Index of the item you are trying to get
-     * @param <T>      Type of Object that you are expecting to get
+     * @param keyPath Base key path for lazy loaded items
+     * @param index   Index path of the item to retrieve
+     * @param <T>     Expected return type
+     * @return The value of the item at the given index
+     * @throws IndexErrorException        When fetching a specific index from a collection but that index does not exist
+     * @throws InvalidCollectionException When fetching from a collection that doesn't exist or in an unexpected format
+     * @throws WrongDataTypeException     When fetching an object that doesn't have the same class as the specified type T
      */
-    protected <T> void getItemFromCollection(String fullPath, Task<T>.TaskCompletionSource result, int index) {
+    protected <T> T getItemFromCollection(KeyPath keyPath, int index) throws InvalidCollectionException, IndexErrorException, WrongDataTypeException {
 
         // ## Collection
 
         // acquire the collection or error out and exit
-        List<Object> collection;
-        try {
-            // try to get the collection
-            collection = getCollection();
-        } catch (InvalidCollectionException ex) {
-            // save the error state
-            result.setError(ex);
-            // exit
-            return;
-        }
+        List<Object> collection = getCollection();
 
         // ## Item
 
@@ -507,18 +315,14 @@ public abstract class Hyper {
 
         } catch (IndexOutOfBoundsException e) {
             // no mapping found, save an error and exit
-            result.setError(new IndexErrorException("Invalid index", e));
-            return;
+            throw new IndexErrorException("Invalid index", e);
         }
 
         // ## Cache
 
         // if an element exists at that location
         if (value != null) {
-            // Build the key
-            String nodeKey = String.valueOf(index);
-            // check for a cached version
-            Object cachedValue = getCachedNode(nodeKey);
+            Object cachedValue = getImmediateCachedNode(String.valueOf(index));
             // if the item exists naturally, and we have a cached version,
             if (cachedValue != null) {
                 // prefer the cached version
@@ -529,21 +333,46 @@ public abstract class Hyper {
         // ## Clean
 
         // turn our value into something meaningful and save it to the results
-        hyperify(fullPath, result, value);
+        return coerce(keyPath.relativePath, value);
     }
 
+    /**
+     * @param node Property of this object to get from cache
+     * @return Hyper node from cache, or null
+     */
+    protected Hyper getImmediateCachedNode(String node) {
+        return getExactCachedNode(getConcatenatedKeyPath(node));
+
+    }
 
     /**
-     * Perform a fetch if an href is available, otherwise, set error state.
+     * Get a Hyper node from the cache at the exact given path
      *
-     * @return A Task who's completion indicates that there was either an error fetching or that
-     * fetching is complete.
+     * @param fullPath exact path to pull from cache
+     * @return Hyper node from cache, or null
      */
-    protected Task<Data> getFetchTask() {
+    protected Hyper getExactCachedNode(String fullPath) {
+        // get the cache
+        HyperCache cache = getContext().getHyperCache();
+        // abandon all hope if we don't have a cache
+        if (cache == null) {
+            return null;
+        }
+        return cache.get(fullPath);
+    }
+
+    /**
+     * Perform a fetch of the node's data if an href is available, otherwise, set error state.
+     *
+     * @return This object's fetched and parsed Data
+     * @throws InterruptedException Network fetch was interrupted
+     * @throws NoHrefException      When fetching deep-links, if there is a missing link between nodes, this error will occur
+     */
+    protected Data performNetworkFetch() throws NoHrefException, InterruptedException {
         URL href = getHref();
         if (href == null) {
             // no href to fetch for, return error state
-            return Task.forError(new NoHrefException("Attempting to fetch data without an \"href\""));
+            throw new NoHrefException("Attempting to fetch data without an \"href\"");
         } else {
             // otherwise do the actual fetch in a task
             return getNetworkFetchTask();
@@ -551,12 +380,14 @@ public abstract class Hyper {
     }
 
     /**
-     * Create an Async task that gets Data from the internet.
+     * Fetch and parse data from the internet using the context's network executor.
+     * <br/>
+     * Requests are pooled in a temporary cache to prevent duplicate network requests.
      *
-     * @return A Task who's completion indicates that there was either an error fetching or that
-     * fetching is complete.
+     * @return Parsed data
+     * @throws InterruptedException Network fetch was interrupted
      */
-    protected Task<Data> getNetworkFetchTask() {
+    protected Data getNetworkFetchTask() throws InterruptedException {
         // We'll need a few context variables so lets get the context
         HyperContext context = getContext();
         // get the client
@@ -570,7 +401,7 @@ public abstract class Hyper {
         // build a request to the href
         Request request = buildRequest(href);
         // using our pool, make a request, and then use the response to build Data
-        return pool.getResponseTask(client, executor, request).continueWithTask(new Continuation<ResponsePackage, Task<Data>>() {
+        Task<Data> dataTask = pool.getResponseTask(client, executor, request).continueWithTask(new Continuation<ResponsePackage, Task<Data>>() {
             @Override
             public Task<Data> then(Task<ResponsePackage> task) throws Exception {
                 // Create our deferred
@@ -602,6 +433,11 @@ public abstract class Hyper {
                 return result.getTask();
             }
         });
+        dataTask.waitForCompletion();
+        if (dataTask.isFaulted()) {
+            Log.e(TAG, "Error fetching data", dataTask.getError());
+        }
+        return dataTask.getResult();
     }
 
     /**
@@ -628,30 +464,28 @@ public abstract class Hyper {
     }
 
     /**
-     * Convert JSONObjects to Hyper nodes and test that the value of an object is the same type that
-     * we are expecting to get.
-     * <br/>
-     * WrongDatatypeException When T does not match up with the type of `value`
+     * Convert Objects to Hyper nodes or to the type of objects we are expecting to get
      *
-     * @param fullPath Absolute node path to coerce
-     * @param result   Result resource to which errors and success are saved to
-     * @param value    Fetched value to coerce as an expected type
-     * @param <T>      Type of Object that you are expecting to get
+     * @param relativePath Relative path for new Hyper nodes
+     * @param value        Value to coerce
+     * @param <T>          Type to coerce value into
+     * @return Coerced value
+     * @throws WrongDataTypeException When fetching an object that doesn't have the same class as the specified type T
      */
-    protected <T> void hyperify(String fullPath, Task<T>.TaskCompletionSource result, Object value) {
+    protected <T> T coerce(String relativePath, Object value) throws WrongDataTypeException {
         if (value == null) {
             // null object null result, save and exit
-            result.setResult(null);
+            return null;
         } else {
             // turn JSONObjects into Hyper nodes
             if (isRawData(value)) {
                 // turn that raw data into something meaningful
                 Data data = createDataFromRawData(value);
                 // put that data in a meaningful hyper node
-                value = createHyperNodeFromData(fullPath, mHref, data);
+                value = createHyperNodeFromData(relativePath, mHref, data);
             } else if (value instanceof Data) {
                 // put that data in a meaningful hyper node
-                value = createHyperNodeFromData(fullPath, mHref, (Data) value);
+                value = createHyperNodeFromData(relativePath, mHref, (Data) value);
             }
             // The TRUE VALUE of value, as the expected type
             T trueValue;
@@ -661,12 +495,11 @@ public abstract class Hyper {
             } catch (ClassCastException ex) {
                 // If the cast failed, then we got a datatype different than the one we expected.
                 // save the error state and exit
-                Log.w(TAG, "WrongDatatypeException", ex);
-                result.setError(new WrongDatatypeException(ex));
-                return;
+                Log.w(TAG, "WrongDataTypeException", ex);
+                throw new WrongDataTypeException(ex);
             }
             // trueValue is what we expected, save success state
-            result.setResult(trueValue);
+            return trueValue;
         }
     }
 
@@ -732,7 +565,7 @@ public abstract class Hyper {
         if (keyPath == null) {
             return KEY_PATH_ROOT;
         } else {
-            return keyPath;
+            return KeyPath.concat(KEY_PATH_ROOT, keyPath);
         }
     }
 
@@ -817,36 +650,107 @@ public abstract class Hyper {
      *
      * @return A Task that may have either an error or a result, which is this instance.
      */
-    public Task<Hyper> fetch() {
+    public Hyper fetch() throws InterruptedException, NoHrefException {
         // if we've already fetched
         if (isFetched()) {
             // return self
-            return Task.forResult(this);
+            return this;
         } else {
             // otherwise do the real fetch
-            final Task<Hyper>.TaskCompletionSource result = Task.create();
-            getFetchTask().continueWith(new Continuation<Data, Void>() {
-                @Override
-                public Void then(Task<Data> task) throws Exception {
-                    // if there is an error
-                    if (task.isFaulted()) {
-                        // save error state
-                        result.setError(task.getError());
-                    } else {
-                        // save success state
-                        result.setResult(Hyper.this);
-                    }
+            performNetworkFetch();
+            return this;
+        }
+    }
+
+    /**
+     * Asyncronously retrieve the value at a given key path
+     *
+     * @param keyPath Key path to retrieve
+     * @param <T>     Expected type to retrieve
+     * @return A task wrapping the get(keyPath) call that is run on the Hyper's context's async executor
+     * @see #get(String)
+     */
+    public <T> Task<T> getAsync(final String keyPath) {
+        final Task<T>.TaskCompletionSource result = Task.create();
+        Task.call(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                try {
+                    result.setResult((T) get(keyPath));
+                } catch (ClassCastException ex) {
+                    result.setError(new WrongDataTypeException(ex));
+                } catch (Exception ex) {
+                    result.setError(ex);
+                }
+                return null;
+            }
+        }, getContext().getAsyncExecutor());
+        return result.getTask();
+    }
+
+    /**
+     * Perform the fetch of this object's data in the background.
+     *
+     * @return A task wrapping the fetch() call that is run on the Hyper's context's async executor
+     * @see #fetch()
+     */
+    public Task<Hyper> fetchAsync() {
+        final Task<Hyper>.TaskCompletionSource result = Task.create();
+        Task.call(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                try {
+                    result.setResult(fetch());
+                } catch (Exception ex) {
+                    result.setError(ex);
+                }
+                return null;
+            }
+        }, getContext().getAsyncExecutor());
+        return result.getTask();
+    }
+
+    /**
+     * Grab each item in this object's collection.
+     * <br/>
+     * This method has an optional argument to also fetch each item's data if it happens to be a
+     * Hyper node with an href.
+     *
+     * @param prefetch Prefetch each Hyper node (with an href) in the collection
+     * @param <T>      Type of items to expect back in the list
+     * @return A task wrapping the each() call that is run on the Hyper's context's async executor
+     * performing network requests on the Hyper's context's network executor.
+     * @see #each()
+     */
+    public <T> Task<List<T>> eachAsync(final boolean prefetch) {
+        final Task<List<T>>.TaskCompletionSource result = Task.create();
+        Task.call(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                List<T> each;
+                try {
+                    each = each();
+                } catch (Exception ex) {
+                    result.setError(ex);
                     return null;
                 }
-            });
-            // return the task
-            return result.getTask();
-        }
+                if (prefetch) {
+                    for (Object obj : each) {
+                        if (obj instanceof Hyper && ((Hyper) obj).getHref() != null) {
+                            ((Hyper) obj).fetch();
+                        }
+                    }
+                }
+                result.setResult(each);
+                return null;
+            }
+        }, getContext().getAsyncExecutor());
+        return result.getTask();
     }
 
     @Override
     public String toString() {
-        return "Hyper." + getFriendlyKeyPath();
+        return getFriendlyKeyPath();
     }
 
     /**
@@ -864,8 +768,8 @@ public abstract class Hyper {
      *
      * @param response Response to parse
      * @return The wrapped Data
-     * @throws DataParseException When parsing goes wrong
-     * @throws IOException        When IO goes wrong
+     * @throws io.hypergroup.hyper.exception.DataParseException When parsing goes wrong
+     * @throws java.io.IOException                              When IO goes wrong
      */
     protected abstract Data parseResponse(ResponsePackage response) throws IOException, DataParseException;
 
@@ -898,6 +802,8 @@ public abstract class Hyper {
      * Class that encapsulates common keyPath parsing.
      */
     /* default */ static class KeyPath {
+
+        String relativePath;
         String nodeKey;
         String nextKey;
 
@@ -909,6 +815,7 @@ public abstract class Hyper {
          * @param keyPath Key path to parse
          */
         KeyPath(String keyPath) {
+            relativePath = keyPath;
             // if a Key path was provided
             if (!TextUtils.isEmpty(keyPath)) {
                 // if it has multiple parts
@@ -931,7 +838,7 @@ public abstract class Hyper {
         /**
          * @return Whether or not this key has multiple levels, i.e "foo.bar" versus just "foo"
          */
-        /* default */ boolean isMultikey() {
+        /* default */ boolean isMultiKey() {
             return nextKey != null;
         }
 
