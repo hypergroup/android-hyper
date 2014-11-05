@@ -11,7 +11,7 @@ import java.net.URL;
 
 import io.hypergroup.hyper.Data;
 import io.hypergroup.hyper.Hyper;
-import io.hypergroup.hyper.context.HyperContext;
+import io.hypergroup.hyper.HyperContext;
 import io.hypergroup.hyper.exception.DataParseException;
 
 /**

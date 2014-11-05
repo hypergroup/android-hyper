@@ -42,13 +42,11 @@ public class HyperFragment extends Fragment implements AdapterView.OnItemClickLi
         ((HyperActivity) getActivity()).getNode(keyPath).continueWith(new Continuation<Hyper, Object>() {
             @Override
             public Void then(final Task<Hyper> task) throws Exception {
-                Log.d(TAG, Thread.currentThread() + " loadKeyPath.then");
                 getActivity().runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        Log.d(TAG, Thread.currentThread() + " loadKeyPath.then.run");
                         if (task.isFaulted()) {
-                            Log.e(TAG, Thread.currentThread() + " Failure", task.getError());
+                            Log.e(TAG, "Failure", task.getError());
                             onFetchError(task.getError());
                         } else {
                             onFetchSuccess(task.getResult());
@@ -81,7 +79,6 @@ public class HyperFragment extends Fragment implements AdapterView.OnItemClickLi
     }
 
     private void onFetchSuccess(Hyper node) {
-        Log.d(TAG, Thread.currentThread() + " onFetchSuccess");
         mAdapter = new HyperAdapter(getActivity(), node);
         mListView.setAdapter(mAdapter);
         mAdapter.notifyDataSetChanged();
@@ -94,7 +91,6 @@ public class HyperFragment extends Fragment implements AdapterView.OnItemClickLi
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-        Log.d(TAG, Thread.currentThread() + " onItemClick");
         HyperView.Entry entry = mAdapter.getItem(position);
         Object value = entry.getValue();
         if (value instanceof Hyper) {

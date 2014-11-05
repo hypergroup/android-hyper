@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.FragmentTransaction;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.util.Log;
 import android.widget.Toast;
 
 import java.net.MalformedURLException;
@@ -14,7 +13,7 @@ import java.util.Stack;
 import bolts.Continuation;
 import bolts.Task;
 import io.hypergroup.hyper.Hyper;
-import io.hypergroup.hyper.context.HyperContext;
+import io.hypergroup.hyper.HyperContext;
 import io.hypergroup.hyper.json.HyperJsons;
 
 
@@ -30,9 +29,6 @@ public class HyperActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        Log.d(TAG, Thread.currentThread() + " onCreate");
-
 
         HyperContext context = new HyperContext.Builder()
             .setAsyncExecutor(Task.BACKGROUND_EXECUTOR)
@@ -66,7 +62,6 @@ public class HyperActivity extends Activity {
     }
 
     public Task<Hyper> getNode(String keyPath) {
-        Log.d(TAG, Thread.currentThread() + " getNode: " + keyPath);
         if (TextUtils.isEmpty(keyPath)) {
             return mRoot.fetchAsync();
         } else {
@@ -79,7 +74,6 @@ public class HyperActivity extends Activity {
     }
 
     private void startNewFragment(String keyPath, String friendlyPath) {
-        Log.d(TAG, Thread.currentThread() + " startNewFragment: " + keyPath);
         HyperFragment fragment = new HyperFragment();
         fragment.setArguments(keyPath);
 

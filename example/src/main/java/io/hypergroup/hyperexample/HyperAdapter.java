@@ -21,10 +21,9 @@ public class HyperAdapter extends ArrayAdapter<HyperView.Entry> {
         for (String key : keys) {
             if (!"collection".equals(key) && !"href".equals(key)) {
                 try {
-                    Log.v(TAG, Thread.currentThread() + " got key: " + key);
                     entries.add(new HyperView.Entry(node, key, node.get(key)));
                 } catch (Exception ex) {
-                    Log.e(TAG, Thread.currentThread() + " Error getting attribute " + key, ex);
+                    Log.e(TAG, "Error getting attribute " + key, ex);
                 }
             }
         }
@@ -37,7 +36,7 @@ public class HyperAdapter extends ArrayAdapter<HyperView.Entry> {
         } catch (HyperException ex) {
             // snarf
         } catch (Exception ex) {
-            Log.e(TAG, Thread.currentThread() + " Error getting collection", ex);
+            Log.e(TAG, "Error getting collection", ex);
         }
 
         if (collection != null) {
@@ -48,11 +47,9 @@ public class HyperAdapter extends ArrayAdapter<HyperView.Entry> {
     }
 
     static List<HyperView.Entry> makeEntries(Hyper node) {
-        Log.d(TAG, Thread.currentThread() + " makeEntries");
         List<HyperView.Entry> entries = new ArrayList<HyperView.Entry>(32);
         addKeyEntries(node, entries);
         addCollectionEntries(node, entries);
-        Log.d(TAG, Thread.currentThread() + " makeEntries done: " + entries);
         return entries;
     }
 

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 
 import bolts.Task;
-import io.hypergroup.hyper.context.HyperContext;
+import io.hypergroup.hyper.HyperContext;
 import io.hypergroup.hyper.exception.DataParseException;
 import io.hypergroup.hyper.exception.IndexErrorException;
 import io.hypergroup.hyper.exception.InvalidCollectionException;
@@ -585,7 +585,6 @@ public abstract class Hyper {
         Task.call(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                Log.d(TAG, "getAsync on " + Thread.currentThread());
                 try {
                     result.setResult((T) get(keyPath));
                 } catch (ClassCastException ex) {
@@ -610,7 +609,6 @@ public abstract class Hyper {
         Task.call(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                Log.d(TAG, "fetchAsync on " + Thread.currentThread());
                 try {
                     result.setResult(fetch());
                 } catch (Exception ex) {

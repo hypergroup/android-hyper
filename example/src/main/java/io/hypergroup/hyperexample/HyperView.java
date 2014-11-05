@@ -91,13 +91,11 @@ public class HyperView extends RelativeLayout {
                     post(new Runnable() {
                         @Override
                         public void run() {
-                            Log.d(TAG, Thread.currentThread() + " loadHyper.then.run");
                             if (task.isFaulted()) {
-                                Log.d(TAG, Thread.currentThread() + " Error fetching node", task.getError());
+                                Log.e(TAG, "Error fetching node", task.getError());
                                 showText("xxx");
                             } else {
                                 if (mEntry != null && mEntry.getValue() == task.getResult()) {
-                                    Log.d(TAG, Thread.currentThread() + " loadHyper.then.run");
                                     showText("-->");
                                 }
                             }
@@ -129,7 +127,7 @@ public class HyperView extends RelativeLayout {
                             }
                         });
                     } catch (Exception ex) {
-                        Log.e(TAG, Thread.currentThread() + " Error fetching url: " + entry.getValue(), ex);
+                        Log.e(TAG, "Error fetching url: " + entry.getValue(), ex);
                     }
 
 

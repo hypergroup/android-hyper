@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.net.URL;
 
 import io.hypergroup.hyper.Hyper;
-import io.hypergroup.hyper.context.HyperContext;
+import io.hypergroup.hyper.HyperContext;
 
 /**
  * Helper method for HyperJson

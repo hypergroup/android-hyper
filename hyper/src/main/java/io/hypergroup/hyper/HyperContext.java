@@ -1,11 +1,10 @@
-package io.hypergroup.hyper.context;
+package io.hypergroup.hyper;
 
 import com.squareup.okhttp.OkHttpClient;
 
 import java.util.concurrent.Executor;
 
 import bolts.Task;
-import io.hypergroup.hyper.Hyper;
 
 /**
  * Encapsulates functionality that is transferred from a Hyper node to the next new Hyper node
