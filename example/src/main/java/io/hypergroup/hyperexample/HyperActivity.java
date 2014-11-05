@@ -49,16 +49,16 @@ public class HyperActivity extends Activity {
         mRoot.fetchAsync().continueWith(new Continuation<Hyper, Object>() {
             @Override
             public Object then(final Task<Hyper> task) throws Exception {
-                if (task.isFaulted()) {
-                    Toast.makeText(HyperActivity.this, "Failed to fetch root: " + task.getError().getMessage(), Toast.LENGTH_SHORT).show();
-                } else {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (task.isFaulted()) {
+                            Toast.makeText(HyperActivity.this, "Failed to fetch root: " + task.getError().getMessage(), Toast.LENGTH_SHORT).show();
+                        } else {
                             openNode(task.getResult());
                         }
-                    });
-                }
+                    }
+                });
                 return null;
             }
         });

@@ -94,6 +94,7 @@ public class HyperFragment extends Fragment implements AdapterView.OnItemClickLi
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+        Log.d(TAG, Thread.currentThread() + " onItemClick");
         HyperView.Entry entry = mAdapter.getItem(position);
         Object value = entry.getValue();
         if (value instanceof Hyper) {

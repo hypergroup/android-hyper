@@ -6,7 +6,6 @@ import java.util.concurrent.Executor;
 
 import bolts.Task;
 import io.hypergroup.hyper.Hyper;
-import io.hypergroup.hyper.context.requests.ConcurrentRequestPool;
 
 /**
  * Encapsulates functionality that is transferred from a Hyper node to the next new Hyper node
@@ -29,10 +28,6 @@ public class HyperContext {
      */
     private OkHttpClient mHttpClient;
 
-    /**
-     * Concurrent request saving mechanism
-     */
-    private ConcurrentRequestPool mConcurrentRequestPool;
 
     /**
      * Executor for network requests
@@ -79,14 +74,6 @@ public class HyperContext {
         mAsyncExecutor = AsyncExecutor;
     }
 
-    public ConcurrentRequestPool getConcurrentRequestPool() {
-        return mConcurrentRequestPool;
-    }
-
-    /* default */ void setConcurrentRequestPool(ConcurrentRequestPool concurrentRequestPool) {
-        mConcurrentRequestPool = concurrentRequestPool;
-    }
-
     /**
      * Build a HyperContext
      */
@@ -96,7 +83,6 @@ public class HyperContext {
         private OkHttpClient mHttpClient = null;
         private Executor mNetworkExecutor = NETWORK_EXECUTOR;
         private Executor mAsyncExecutor = ASYNC_EXECUTOR;
-        private ConcurrentRequestPool mConcurrentRequestPool = new ConcurrentRequestPool();
 
         //private HyperCache mHyperCache;
         public void Builder() {
@@ -125,14 +111,6 @@ public class HyperContext {
         }
 
         /**
-         * Override the default concurrent request pool
-         */
-        public Builder setConcurrentRequestPool(ConcurrentRequestPool pool) {
-            mConcurrentRequestPool = pool;
-            return this;
-        }
-
-        /**
          * Override the default Fetch Executor
          */
         public Builder setAsyncExecutor(Executor AsyncExecutor) {
@@ -151,12 +129,6 @@ public class HyperContext {
                 client = new OkHttpClient();
             }
             context.setHttpClient(client);
-
-            ConcurrentRequestPool pool = mConcurrentRequestPool;
-            if (pool == null) {
-                pool = new ConcurrentRequestPool();
-            }
-            context.setConcurrentRequestPool(pool);
 
             return context;
         }

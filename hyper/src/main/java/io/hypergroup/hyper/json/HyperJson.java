@@ -1,6 +1,7 @@
 package io.hypergroup.hyper.json;
 
 import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -11,7 +12,6 @@ import java.net.URL;
 import io.hypergroup.hyper.Data;
 import io.hypergroup.hyper.Hyper;
 import io.hypergroup.hyper.context.HyperContext;
-import io.hypergroup.hyper.context.requests.ResponsePackage;
 import io.hypergroup.hyper.exception.DataParseException;
 
 /**
@@ -61,9 +61,9 @@ public class HyperJson extends Hyper {
     }
 
     @Override
-    protected Data parseResponse(ResponsePackage response) throws IOException, DataParseException {
+    protected Data parseResponse(Response response) throws IOException, DataParseException {
         // get the body from the response
-        String body = response.getBody();
+        String body = response.body().string();
         // try to parse the response
         JSONObject json;
         try {

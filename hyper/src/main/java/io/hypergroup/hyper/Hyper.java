@@ -5,19 +5,16 @@ import android.util.Log;
 
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.Executor;
 
-import bolts.Continuation;
 import bolts.Task;
 import io.hypergroup.hyper.context.HyperContext;
-import io.hypergroup.hyper.context.requests.ConcurrentRequestPool;
-import io.hypergroup.hyper.context.requests.ResponsePackage;
 import io.hypergroup.hyper.exception.DataParseException;
 import io.hypergroup.hyper.exception.IndexErrorException;
 import io.hypergroup.hyper.exception.InvalidCollectionException;
@@ -310,7 +307,7 @@ public abstract class Hyper {
             throw new NoHrefException("Attempting to fetch data without an \"href\"");
         } else {
             // otherwise do the actual fetch in a task
-            return getNetworkFetchTask();
+            return fetchDataFromNetwork();
         }
     }
 
@@ -322,58 +319,46 @@ public abstract class Hyper {
      * @return Parsed data
      * @throws InterruptedException Network fetch was interrupted
      */
-    protected Data getNetworkFetchTask() throws InterruptedException {
-        // We'll need a few context variables so lets get the context
-        HyperContext context = getContext();
+    protected Data fetchDataFromNetwork() throws InterruptedException {
         // get the client
-        OkHttpClient client = context.getHttpClient();
-        // and the executor
-        Executor executor = context.getNetworkExecutor();
-        // and the request pool
-        ConcurrentRequestPool pool = context.getConcurrentRequestPool();
+        OkHttpClient client = getContext().getHttpClient();
         // and our href
         URL href = getHref();
         // build a request to the href
         Request request = buildRequest(href);
         // using our pool, make a request, and then use the response to build Data
-        Task<Data> dataTask = pool.getResponseTask(client, executor, request).continueWithTask(new Continuation<ResponsePackage, Task<Data>>() {
-            @Override
-            public Task<Data> then(Task<ResponsePackage> task) throws Exception {
-                // Create our deferred
-                Task<Data>.TaskCompletionSource result = Task.create();
-                // if the request error'd out
-                if (task.isFaulted()) {
-                    // save error state
-                    result.setError(task.getError());
-                } else {
-                    // Use the response
-                    ResponsePackage response = task.getResult();
-                    // under all circumstances, we have fetched, but we have only fetched when the
-                    // following block is completed or fails to complete
-                    try {
-                        // parse data from that
-                        Data data = parseResponse(response);
-                        // save the data
-                        addData(data);
-                        // save success state
-                        result.setResult(data);
-                    } catch (Exception ex) {
-                        // save error state
-                        result.setError(ex);
-                    } finally {
-                        // mark fetched as having occurred whether or not the process succeeds
-                        setFetched(true);
-                    }
-                }
-                return result.getTask();
-            }
-        });
-        dataTask.waitForCompletion();
-        if (dataTask.isFaulted()) {
-            Log.e(TAG, "Error fetching data", dataTask.getError());
+
+        // Get a response
+        Response response;
+        try {
+            // make the request
+            Log.v(TAG, ">>> " + href);
+            response = client.newCall(request).execute();
+            Log.v(TAG, "<<< " + href);
+        } catch (IOException ex) {
+            // note error state
+            Log.e(TAG, "Error fetching data", ex);
+            return null;
+        } finally {
+            setFetched(true);
         }
-        return dataTask.getResult();
+
+        // Parse a response
+        try {
+            // parse data from that
+            Data data = parseResponse(response);
+            // save the data
+            addData(data);
+        } catch (Exception ex) {
+            // note error state
+            Log.e(TAG, "Error fetching data", ex);
+        } finally {
+            // mark fetched as having occurred whether or not the process succeeds
+            setFetched(true);
+        }
+        return mData;
     }
+
 
     /**
      * Whether or not we should do a live fetch to acquire a key
@@ -698,7 +683,7 @@ public abstract class Hyper {
      * @throws io.hypergroup.hyper.exception.DataParseException When parsing goes wrong
      * @throws java.io.IOException                              When IO goes wrong
      */
-    protected abstract Data parseResponse(ResponsePackage response) throws IOException, DataParseException;
+    protected abstract Data parseResponse(Response response) throws IOException, DataParseException;
 
     /**
      * Return whether or not the data is in the raw underlying format (for example, JSONObject)
