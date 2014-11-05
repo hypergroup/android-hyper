@@ -8,7 +8,6 @@ import junit.framework.TestCase;
 
 import java.util.List;
 
-import bolts.Continuation;
 import bolts.Task;
 import io.hypergroup.hyper.Data;
 import io.hypergroup.hyper.Hyper;
@@ -42,7 +41,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our hyper node using the mock server
-        Hyper hyper = HyperJson.createRoot(server.getUrl(JsonFiles.ROOT.URL));
+        Hyper hyper = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL));
 
         // Perform a fetch for testing
         Task<Hyper> task = hyper.fetchAsync();
@@ -71,7 +70,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.ROOT.URL));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL));
 
         // Perform a fetch for testing
         Task<Hyper> task = root.fetchAsync();
@@ -111,7 +110,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.ROOT.URL));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL));
 
         // Perform a fetch for testing
         Task<String> task = root.getAsync("current_user.first_name");
@@ -147,7 +146,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.ROOT.URL));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL));
 
         // Perform a fetch for testing
         Task<Integer> task = root.getAsync("current_user.friends.count");
@@ -173,124 +172,6 @@ public class HyperJsonTest extends TestCase {
         server.shutdown();
     }
 
-    public void testDeepNodeIsCached() throws Exception {
-
-        // Create a mock server
-        MockWebServer server = new MockWebServer();
-        server.enqueue(new MockResponse().setBody(JsonFiles.ROOT.GET));
-        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET));
-        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET)); // extra in case of failure
-        server.play();
-
-        // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.ROOT.URL));
-
-        // Perform a fetch for testing
-        Task<Hyper> fetchUserTask1 = root.<Hyper>getAsync("current_user").continueWithTask(new Continuation<Hyper, Task<Hyper>>() {
-            @Override
-            public Task<Hyper> then(Task<Hyper> task) throws Exception {
-                return task.getResult().fetchAsync();
-            }
-        });
-        fetchUserTask1.waitForCompletion();
-
-        // fetch the same object for testing
-        Task<Hyper> fetchUserTask2 = root.<Hyper>getAsync("current_user").continueWithTask(new Continuation<Hyper, Task<Hyper>>() {
-            @Override
-            public Task<Hyper> then(Task<Hyper> task) throws Exception {
-                return task.getResult().fetchAsync();
-            }
-        });
-        fetchUserTask2.waitForCompletion();
-
-        // perform tasks in parallel (2nd task initiated during first 1st)
-        fetchUserTask1.waitForCompletion();
-        fetchUserTask2.waitForCompletion();
-
-        // test error
-        assertFalse(fetchUserTask1.isFaulted());
-        assertNull(fetchUserTask1.getError());
-        assertNotNull(fetchUserTask1.getResult());
-        assertFalse(fetchUserTask2.isFaulted());
-        assertNull(fetchUserTask2.getError());
-        assertNotNull(fetchUserTask2.getResult());
-
-        // grab results
-        Hyper user1 = fetchUserTask1.getResult();
-        Hyper user2 = fetchUserTask2.getResult();
-
-        // test requests
-        assertEquals(2, server.getRequestCount());
-        RecordedRequest request1 = server.takeRequest();
-        assertEquals(JsonFiles.ROOT.URL, request1.getPath());
-        RecordedRequest request2 = server.takeRequest();
-        assertEquals(JsonFiles.USER.URL.replace("<user_id>", "1"), request2.getPath());
-
-        // test data
-        assertSame("user1 == user2", user1, user2);
-
-        // shut down the server
-        server.shutdown();
-    }
-
-    public void testDeepNodeIsCachedParallel() throws Exception {
-
-        // Create a mock server
-        MockWebServer server = new MockWebServer();
-        server.enqueue(new MockResponse().setBody(JsonFiles.ROOT.GET));
-        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET));
-        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET)); // extra in case of failure
-        server.play();
-
-        // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.ROOT.URL));
-
-        // Perform a fetch for testing
-        Task<Hyper> fetchUserTask1 = root.<Hyper>getAsync("current_user").continueWithTask(new Continuation<Hyper, Task<Hyper>>() {
-            @Override
-            public Task<Hyper> then(Task<Hyper> task) throws Exception {
-                return task.getResult().fetchAsync();
-            }
-        });
-
-        // fetch the same object for testing
-        Task<Hyper> fetchUserTask2 = root.<Hyper>getAsync("current_user").continueWithTask(new Continuation<Hyper, Task<Hyper>>() {
-            @Override
-            public Task<Hyper> then(Task<Hyper> task) throws Exception {
-                return task.getResult().fetchAsync();
-            }
-        });
-
-        // perform tasks in parallel (2nd task initiated during first 1st)
-        fetchUserTask1.waitForCompletion();
-        fetchUserTask2.waitForCompletion();
-
-        // test error
-        assertFalse(fetchUserTask1.isFaulted());
-        assertNull(fetchUserTask1.getError());
-        assertNotNull(fetchUserTask1.getResult());
-        assertFalse(fetchUserTask2.isFaulted());
-        assertNull(fetchUserTask2.getError());
-        assertNotNull(fetchUserTask2.getResult());
-
-        // grab results
-        Hyper user1 = fetchUserTask1.getResult();
-        Hyper user2 = fetchUserTask2.getResult();
-
-        // test requests
-        assertEquals(2, server.getRequestCount());
-        RecordedRequest request1 = server.takeRequest();
-        assertEquals(JsonFiles.ROOT.URL, request1.getPath());
-        RecordedRequest request2 = server.takeRequest();
-        assertEquals(JsonFiles.USER.URL.replace("<user_id>", "1"), request2.getPath());
-
-        // test data
-        assertSame("user1 == user2", user1, user2);
-
-        // shut down the server
-        server.shutdown();
-    }
-
     public void testCollection() throws Exception {
 
         // Create a mock server
@@ -300,7 +181,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1")));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1")));
         Task<Hyper> fetchTask = root.fetchAsync();
         fetchTask.waitForCompletion();
 
@@ -333,7 +214,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.ROOT.URL));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL));
         Task<Hyper> fetchTask = root.fetchAsync();
         fetchTask.waitForCompletion();
 
@@ -372,7 +253,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.ROOT.URL));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL));
         Task<Hyper> fetchTask = root.fetchAsync();
         fetchTask.waitForCompletion();
 
@@ -412,7 +293,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.USER.URL.replace("<user_id>", "1")));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.USER.URL.replace("<user_id>", "1")));
         Task<Hyper> fetchTask = root.fetchAsync();
         fetchTask.waitForCompletion();
 
@@ -458,7 +339,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1")));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1")));
         Task<Hyper> fetchTask = root.fetchAsync();
         fetchTask.waitForCompletion();
 
@@ -481,33 +362,6 @@ public class HyperJsonTest extends TestCase {
 
     }
 
-    public void testCollectionItemCached() throws Exception {
-
-        // Create a mock server
-        MockWebServer server = new MockWebServer();
-        server.enqueue(new MockResponse().setBody(JsonFiles.FRIENDS.GET));
-        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET)); // extra in case of failure
-        server.play();
-
-        // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"))).fetch();
-        Hyper friend1 = root.get("0");
-        Hyper friend2 = root.get("0");
-
-        // test requests
-        assertEquals(1, server.getRequestCount());
-        RecordedRequest request1 = server.takeRequest();
-        assertEquals(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"), request1.getPath());
-
-        // test data
-        assertEquals("/api/users/1", friend1.getHref().getPath());
-        assertSame("friend1 == friend2", friend1, friend2);
-
-        // shut down the server
-        server.shutdown();
-
-    }
-
     public void testDeepCollectionItem() throws Exception {
 
         // Create a mock server
@@ -518,7 +372,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.USER.URL.replace("<user_id>", "1"))).fetch();
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.USER.URL.replace("<user_id>", "1"))).fetch();
 
         Hyper friend = root.get("friends.0");
 
@@ -537,52 +391,6 @@ public class HyperJsonTest extends TestCase {
 
     }
 
-    public void testDeepCollectionItemCached() throws Exception {
-
-        // Create a mock server
-        MockWebServer server = new MockWebServer();
-        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET));
-        server.enqueue(new MockResponse().setBody(JsonFiles.FRIENDS.GET));
-        server.enqueue(new MockResponse().setBody(JsonFiles.FRIENDS.GET)); // extra in case of failure
-        server.play();
-
-        // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.USER.URL.replace("<user_id>", "1"))).fetch();
-
-        Task<Hyper> friend1Task = root.getAsync("friends.0");
-        friend1Task.waitForCompletion();
-
-        assertFalse(friend1Task.isFaulted());
-        assertNull(friend1Task.getError());
-        assertNotNull(friend1Task.getResult());
-
-        Task<Hyper> friend2Task = root.getAsync("friends.0");
-        friend2Task.waitForCompletion();
-
-        assertFalse(friend2Task.isFaulted());
-        assertNull(friend2Task.getError());
-        assertNotNull(friend2Task.getResult());
-
-        // test requests
-        assertEquals(2, server.getRequestCount());
-        RecordedRequest request1 = server.takeRequest();
-        assertEquals(JsonFiles.USER.URL.replace("<user_id>", "1"), request1.getPath());
-        RecordedRequest request2 = server.takeRequest();
-        assertEquals(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"), request2.getPath());
-
-        // grab results
-        Hyper friend1 = friend1Task.getResult();
-        Hyper friend2 = friend1Task.getResult();
-
-        // test data
-        assertEquals("/api/users/1", friend1.getHref().getPath());
-        assertSame("friend1 == friend2", friend1, friend2);
-
-        // shut down the server
-        server.shutdown();
-
-    }
-
     public void testCollectionItemIndexOOB() throws Exception {
 
         // Create a mock server
@@ -592,7 +400,7 @@ public class HyperJsonTest extends TestCase {
         server.play();
 
         // Create our root node using the mock server
-        Hyper root = HyperJson.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1")));
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1")));
         Task<Hyper> fetchTask = root.fetchAsync();
         fetchTask.waitForCompletion();
 
@@ -619,6 +427,163 @@ public class HyperJsonTest extends TestCase {
         // shut down the server
         server.shutdown();
 
+    }
+
+    public void testCollectionItemInvalidatedNotCached() throws Exception {
+        // Create a mock server
+        MockWebServer server = new MockWebServer();
+        server.enqueue(new MockResponse().setBody(JsonFiles.FRIENDS.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET)); // extra in case of failure
+        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET)); // extra in case of failure
+        server.play();
+
+        // Create our root node using the mock server
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"))).fetch();
+        Hyper friend1 = root.get("0");
+        friend1.invalidate();
+        Hyper friend2 = root.get("0");
+
+        // test requests
+        assertEquals(1, server.getRequestCount());
+        RecordedRequest request1 = server.takeRequest();
+        assertEquals(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"), request1.getPath());
+
+        // test data
+        assertEquals("/api/users/1", friend1.getHref().getPath());
+        assertEquals("/api/users/1", friend2.getHref().getPath());
+        assertNotSame("test that friend1 != friend2", friend1, friend2);
+
+        // shut down the server
+        server.shutdown();
+    }
+
+    public void testKeyPathCollectionDeep() throws Exception {
+        // Create a mock server
+        MockWebServer server = new MockWebServer();
+        server.enqueue(new MockResponse().setBody(JsonFiles.ROOT.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USERS.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USERS.GET)); // extra in case of failure
+        server.play();
+
+        // Create our root node using the mock server
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL)).fetch();
+        Hyper user = root.get("users.0");
+
+        // test requests
+        assertEquals(2, server.getRequestCount());
+        RecordedRequest request1 = server.takeRequest();
+        assertEquals(JsonFiles.ROOT.URL, request1.getPath());
+        RecordedRequest request2 = server.takeRequest();
+        assertEquals(JsonFiles.USERS.URL, request2.getPath());
+
+        // test data
+        assertEquals("users.0", user.getKeyPath());
+
+        // shut down the server
+        server.shutdown();
+    }
+
+    public void testKeyPathImmediateCollection() throws Exception {
+        // Create a mock server
+        MockWebServer server = new MockWebServer();
+        server.enqueue(new MockResponse().setBody(JsonFiles.FRIENDS.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USERS.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USERS.GET)); // extra in case of failure
+        server.play();
+
+        // Create our root node using the mock server
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"))).fetch();
+        Hyper user = root.get("0");
+
+        // test requests
+        assertEquals(1, server.getRequestCount());
+        RecordedRequest request1 = server.takeRequest();
+        assertEquals(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"), request1.getPath());
+
+        // test data
+        assertEquals("0", user.getKeyPath());
+
+        // shut down the server
+        server.shutdown();
+    }
+
+    public void testKeyPathDeep() throws Exception {
+        // Create a mock server
+        MockWebServer server = new MockWebServer();
+        server.enqueue(new MockResponse().setBody(JsonFiles.ROOT.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USERS.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USERS.GET)); // extra in case of failure
+        server.play();
+
+        // Create our root node using the mock server
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL)).fetch();
+        Hyper user = root.get("users.search.input.search");
+
+        // test requests
+        assertEquals(1, server.getRequestCount());
+        RecordedRequest request1 = server.takeRequest();
+        assertEquals(JsonFiles.ROOT.URL, request1.getPath());
+
+        // test data
+        assertEquals("users.search.input.search", user.getKeyPath());
+
+        // shut down the server
+        server.shutdown();
+    }
+
+    public void testKeyPathImmediate() throws Exception {
+        // Create a mock server
+        MockWebServer server = new MockWebServer();
+        server.enqueue(new MockResponse().setBody(JsonFiles.ROOT.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USERS.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.USERS.GET)); // extra in case of failure
+        server.play();
+
+        // Create our root node using the mock server
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.ROOT.URL)).fetch();
+        Hyper user = root.get("users");
+
+        // test requests
+        assertEquals(1, server.getRequestCount());
+        RecordedRequest request1 = server.takeRequest();
+        assertEquals(JsonFiles.ROOT.URL, request1.getPath());
+
+        // test data
+        assertEquals("users", user.getKeyPath());
+
+        // shut down the server
+        server.shutdown();
+    }
+
+    public void testMergeAfterFetch() throws Exception {
+        // Create a mock server
+        MockWebServer server = new MockWebServer();
+        server.enqueue(new MockResponse().setBody(JsonFiles.USER.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.FRIENDS.GET));
+        server.enqueue(new MockResponse().setBody(JsonFiles.FRIENDS.GET)); // extra in case of failure
+        server.play();
+
+        // Create our root node using the mock server
+        Hyper root = HyperJsons.createRoot(server.getUrl(JsonFiles.USER.URL.replace("<user_id>", "1"))).fetch();
+        Hyper friends = root.get("friends");
+        Integer count1 = friends.get("count");
+        friends.fetch();
+        Integer count2 = friends.get("count");
+
+        // test requests
+        assertEquals(2, server.getRequestCount());
+        RecordedRequest request1 = server.takeRequest();
+        assertEquals(JsonFiles.USER.URL.replace("<user_id>", "1"), request1.getPath());
+        RecordedRequest request2 = server.takeRequest();
+        assertEquals(JsonFiles.FRIENDS.URL.replace("<user_id>", "1"), request2.getPath());
+
+        // test data
+        assertEquals((Object) 10, count1);
+        assertEquals((Object) 10, count2);
+
+        // shut down the server
+        server.shutdown();
     }
 
 

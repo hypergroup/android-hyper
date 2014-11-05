@@ -29,51 +29,19 @@ public class HyperJson extends Hyper {
     private static final String HEADER_ACCEPT = "Accept";
 
     /**
-     * Accept application/hyper+json at top priority
-     */
-    private static final String ACCEPT_HYPER_JSON = "application/hyper+json; q=1";
-
-    /**
-     * Accept application/json at a high priority
-     */
-    private static final String ACCEPT_JSON = "application/json; q=0.95";
-
-    /**
-     * Accept text at a low priority
-     */
-    private static final String ACCEPT_TEXT = "text/plain; q=0.1";
-
-    /**
      * Accept anything at a low priority
      */
-    private static final String ACCEPT_ANY = "*/*; q=0";
+    private static final String ACCEPT_ANY = "*/*";
 
     /**
-     * Create a new root HyperJson node at the given URL
-     *
-     * @param url URL that is the root of the hypermedia
-     * @return The newly created root Hyper node
+     * HTTP Header for Accept-Encoding
      */
-    public static Hyper createRoot(URL url) {
-        // bare bones root node
-        return createRoot(url, (new HyperContext.Builder()).build());
-    }
+    private static final String HTTP_HEADER_ACCEPT_ENCODING = "Accept-Encoding";
 
     /**
-     * Create a new root HyperJson node at the given url with your http client
-     *
-     * @param url          URL that is the root of the hypermedia
-     * @param hyperContext Your configured HyperContext
-     * @return The newly created root Hyper node
+     * Allow gzip and compression
      */
-    public static Hyper createRoot(URL url, HyperContext hyperContext) {
-        // Build context
-        // create the root node
-        HyperJson node = new HyperJson(null, url, hyperContext);
-        // don't forget to set the root
-        hyperContext.setRoot(node);
-        return node;
-    }
+    private static final String HTTP_HEADER_ACCEPT_ENCODING_GZIP = "compress, gzip";
 
     /* default */ HyperJson(String keyPath, URL href, HyperContext context) {
         super(keyPath, href, context);
@@ -86,12 +54,10 @@ public class HyperJson extends Hyper {
     @Override
     protected Request buildRequest(URL href) {
         return new Request.Builder()
-                .url(mHref)
-                .addHeader(HEADER_ACCEPT, ACCEPT_HYPER_JSON)// accept and prefer hyper+json
-                .addHeader(HEADER_ACCEPT, ACCEPT_JSON)// accept json
-                .addHeader(HEADER_ACCEPT, ACCEPT_TEXT)// accept text also
-                .addHeader(HEADER_ACCEPT, ACCEPT_ANY)// accept anything really, if parsing fails, then we have problems
-                .build(); // build that request
+            .url(mHref)
+            .addHeader(HTTP_HEADER_ACCEPT_ENCODING, HTTP_HEADER_ACCEPT_ENCODING_GZIP) // accept compression
+            .addHeader(HEADER_ACCEPT, ACCEPT_ANY)// accept anything really, if parsing fails, then we have problems
+            .build(); // build that request
     }
 
     @Override

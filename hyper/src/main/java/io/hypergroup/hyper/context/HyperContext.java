@@ -6,7 +6,6 @@ import java.util.concurrent.Executor;
 
 import bolts.Task;
 import io.hypergroup.hyper.Hyper;
-import io.hypergroup.hyper.context.cache.HyperCache;
 import io.hypergroup.hyper.context.requests.ConcurrentRequestPool;
 
 /**
@@ -29,11 +28,6 @@ public class HyperContext {
      * Http client
      */
     private OkHttpClient mHttpClient;
-
-    /**
-     * Local caching mechanism
-     */
-    private HyperCache mHyperCache;
 
     /**
      * Concurrent request saving mechanism
@@ -69,14 +63,6 @@ public class HyperContext {
         mHttpClient = httpClient;
     }
 
-    public HyperCache getHyperCache() {
-        return mHyperCache;
-    }
-
-    public void setHyperCache(HyperCache hyperCache) {
-        mHyperCache = hyperCache;
-    }
-
     public Executor getNetworkExecutor() {
         return mNetworkExecutor;
     }
@@ -108,7 +94,6 @@ public class HyperContext {
 
         private Hyper mRoot;
         private OkHttpClient mHttpClient = null;
-        private HyperCache mHyperCache = null;
         private Executor mNetworkExecutor = NETWORK_EXECUTOR;
         private Executor mAsyncExecutor = ASYNC_EXECUTOR;
         private ConcurrentRequestPool mConcurrentRequestPool = new ConcurrentRequestPool();
@@ -128,11 +113,6 @@ public class HyperContext {
 
         public Builder setHttpClient(OkHttpClient httpClient) {
             mHttpClient = httpClient;
-            return this;
-        }
-
-        public Builder setHyperCache(HyperCache hyperCache) {
-            mHyperCache = hyperCache;
             return this;
         }
 
@@ -171,12 +151,6 @@ public class HyperContext {
                 client = new OkHttpClient();
             }
             context.setHttpClient(client);
-
-            HyperCache cache = mHyperCache;
-            if (cache == null) {
-                cache = new HyperCache();
-            }
-            context.setHyperCache(cache);
 
             ConcurrentRequestPool pool = mConcurrentRequestPool;
             if (pool == null) {

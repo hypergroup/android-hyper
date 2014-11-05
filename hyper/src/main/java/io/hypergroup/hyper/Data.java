@@ -1,5 +1,6 @@
 package io.hypergroup.hyper;
 
+import java.io.Serializable;
 import java.net.URL;
 import java.util.List;
 
@@ -10,7 +11,7 @@ import io.hypergroup.hyper.exception.NoHrefException;
 /**
  * Represents underlying data, a thin wrapper for object such as JSONObject.
  */
-public interface Data {
+public interface Data extends Serializable {
 
     /**
      * Test for existence of a property in this data
@@ -50,5 +51,12 @@ public interface Data {
      * Retrieve the list of keys for this data
      */
     public String[] getKeys();
+
+    /**
+     * Add additional data into the data structure
+     *
+     * @param data Data whose keys should be merged into this object, those keys should take precendence over the original data.
+     */
+    public void merge(Data data);
 
 }

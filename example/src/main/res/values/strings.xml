@@ -4,5 +4,7 @@
     <string name="app_name">HyperExample</string>
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
+    <string name="loading">Loading...</string>
+    <string name="desc_loaded_image">Loaded image</string>
 
 </resources>

@@ -1,6 +1,7 @@
 package io.hypergroup.hyper.json;
 
 import android.text.TextUtils;
+import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -23,6 +24,11 @@ import io.hypergroup.hyper.exception.NoHrefException;
  * Thinly wraps JSONObject and its respective errors
  */
 public class JsonData implements Data {
+
+    /**
+     * Tag for logging
+     */
+    private static final String TAG = JsonData.class.getSimpleName();
 
     /**
      * Key used to extract collections
@@ -60,7 +66,7 @@ public class JsonData implements Data {
             return mData.get(key);
         } catch (JSONException ex) {
             // fail with a standardized exception
-            throw new MissingPropertyException("Property not found", ex);
+            throw new MissingPropertyException("Property not found: " + key, ex);
         }
     }
 
@@ -131,5 +137,19 @@ public class JsonData implements Data {
             keys.add(iKeys.next());
         }
         return keys.toArray(new String[keys.size()]);
+    }
+
+    @Override
+    public void merge(Data data) {
+        JSONObject jsonData = ((JsonData) data).mData;
+        Iterator<String> iKeys = jsonData.keys();
+        while (iKeys.hasNext()) {
+            String key = iKeys.next();
+            try {
+                mData.put(key, jsonData.get(key));
+            } catch (JSONException ex) {
+                Log.w(TAG, "Error merging data for key: " + key, ex);
+            }
+        }
     }
 }

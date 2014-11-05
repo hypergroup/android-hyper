@@ -16,7 +16,6 @@ import java.util.concurrent.Executor;
 import bolts.Continuation;
 import bolts.Task;
 import io.hypergroup.hyper.context.HyperContext;
-import io.hypergroup.hyper.context.cache.HyperCache;
 import io.hypergroup.hyper.context.requests.ConcurrentRequestPool;
 import io.hypergroup.hyper.context.requests.ResponsePackage;
 import io.hypergroup.hyper.exception.DataParseException;
@@ -81,7 +80,6 @@ public abstract class Hyper {
         mKeyPath = keyPath;
         mHref = href;
         mContext = context;
-        saveToCache();
     }
 
     /**
@@ -99,7 +97,6 @@ public abstract class Hyper {
         }
         setData(data);
         mContext = context;
-        saveToCache();
     }
 
     /**
@@ -135,14 +132,6 @@ public abstract class Hyper {
         // ## If we already have it
         if (!shouldFetchForKey(parsed.nodeKey)) {
             return getProperty(parsed);
-        }
-
-        // ## Cache
-        Hyper cached = getImmediateCachedNode(parsed.nodeKey);
-        if (cached != null) {
-            if (parsed.isMultiKey()) {
-                return cached.get(parsed.nextKey);
-            }
         }
 
         // ## Fetch
@@ -200,18 +189,8 @@ public abstract class Hyper {
                 items.add(null);
             } else {
 
-                // ## Cache
-                String relativePath = String.valueOf(index);
-
-                // check for a cached version
-                Object cachedValue = getImmediateCachedNode(relativePath);
-                // if the item exists naturally, and we have a cached version,
-                if (cachedValue != null) {
-                    // use the cached version
-                    value = cachedValue;
-                }
-
                 // ## Coerce
+                String relativePath = String.valueOf(index);
                 value = coerce(relativePath, value);
 
                 // coerce to the expected else fail
@@ -266,14 +245,7 @@ public abstract class Hyper {
      * @throws WrongDataTypeException   When fetching an object that doesn't have the same class as the specified type T
      */
     protected <T> T getPropertyFromData(KeyPath keyPath) throws MissingPropertyException, WrongDataTypeException {
-        Object value;
-        // attempt to retrieved cached node so that we do not have to create another
-        Hyper cached = getImmediateCachedNode(keyPath.nodeKey);
-        if (cached != null) {
-            value = cached;
-        } else {
-            value = getData().getProperty(keyPath.nodeKey);
-        }
+        Object value = getData().getProperty(keyPath.nodeKey);
         // turn our value into something meaningful and save it to the results
         return coerce(keyPath.relativePath, value);
     }
@@ -318,47 +290,10 @@ public abstract class Hyper {
             throw new IndexErrorException("Invalid index", e);
         }
 
-        // ## Cache
-
-        // if an element exists at that location
-        if (value != null) {
-            Object cachedValue = getImmediateCachedNode(String.valueOf(index));
-            // if the item exists naturally, and we have a cached version,
-            if (cachedValue != null) {
-                // prefer the cached version
-                value = cachedValue;
-            }
-        }
-
         // ## Clean
 
         // turn our value into something meaningful and save it to the results
         return coerce(keyPath.relativePath, value);
-    }
-
-    /**
-     * @param node Property of this object to get from cache
-     * @return Hyper node from cache, or null
-     */
-    protected Hyper getImmediateCachedNode(String node) {
-        return getExactCachedNode(getConcatenatedKeyPath(node));
-
-    }
-
-    /**
-     * Get a Hyper node from the cache at the exact given path
-     *
-     * @param fullPath exact path to pull from cache
-     * @return Hyper node from cache, or null
-     */
-    protected Hyper getExactCachedNode(String fullPath) {
-        // get the cache
-        HyperCache cache = getContext().getHyperCache();
-        // abandon all hope if we don't have a cache
-        if (cache == null) {
-            return null;
-        }
-        return cache.get(fullPath);
     }
 
     /**
@@ -419,7 +354,7 @@ public abstract class Hyper {
                         // parse data from that
                         Data data = parseResponse(response);
                         // save the data
-                        setData(data);
+                        addData(data);
                         // save success state
                         result.setResult(data);
                     } catch (Exception ex) {
@@ -477,15 +412,20 @@ public abstract class Hyper {
             // null object null result, save and exit
             return null;
         } else {
+
             // turn JSONObjects into Hyper nodes
             if (isRawData(value)) {
+                // get the full path
+                String fullPath = getConcatenatedKeyPath(relativePath);
                 // turn that raw data into something meaningful
                 Data data = createDataFromRawData(value);
                 // put that data in a meaningful hyper node
-                value = createHyperNodeFromData(relativePath, mHref, data);
+                value = createHyperNodeFromData(fullPath, mHref, data);
             } else if (value instanceof Data) {
+                // get the full path
+                String fullPath = getConcatenatedKeyPath(relativePath);
                 // put that data in a meaningful hyper node
-                value = createHyperNodeFromData(relativePath, mHref, (Data) value);
+                value = createHyperNodeFromData(fullPath, mHref, (Data) value);
             }
             // The TRUE VALUE of value, as the expected type
             T trueValue;
@@ -522,18 +462,8 @@ public abstract class Hyper {
     /**
      * @return The context of this Hyper node
      */
-    protected HyperContext getContext() {
+    public HyperContext getContext() {
         return mContext;
-    }
-
-    /**
-     * Save this Hyper node in the cache, if applicable
-     */
-    protected void saveToCache() {
-        HyperCache cache = getContext().getHyperCache();
-        if (cache != null) {
-            cache.save(this);
-        }
     }
 
     /**
@@ -541,6 +471,17 @@ public abstract class Hyper {
      */
     public Data getData() {
         return mData;
+    }
+
+    /**
+     * Merge the underlying data with new data
+     */
+    protected void addData(Data data) {
+        if (mData == null) {
+            mData = data;
+        } else {
+            mData.merge(data);
+        }
     }
 
     /**
@@ -596,22 +537,6 @@ public abstract class Hyper {
     public void invalidate() {
         setData(null);
         setFetched(false);
-        HyperCache cache = getContext().getHyperCache();
-        if (cache != null) {
-            cache.invalidate(this);
-        }
-    }
-
-    /**
-     * Invalidate a keyPath from the cache, if applicable
-     *
-     * @param keyPath Key path to invalidate
-     */
-    public void invalidate(String keyPath) {
-        HyperCache cache = getContext().getHyperCache();
-        if (cache != null) {
-            cache.invalidate(keyPath);
-        }
     }
 
     /**
@@ -675,6 +600,7 @@ public abstract class Hyper {
         Task.call(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
+                Log.d(TAG, "getAsync on " + Thread.currentThread());
                 try {
                     result.setResult((T) get(keyPath));
                 } catch (ClassCastException ex) {
@@ -699,6 +625,7 @@ public abstract class Hyper {
         Task.call(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
+                Log.d(TAG, "fetchAsync on " + Thread.currentThread());
                 try {
                     result.setResult(fetch());
                 } catch (Exception ex) {
