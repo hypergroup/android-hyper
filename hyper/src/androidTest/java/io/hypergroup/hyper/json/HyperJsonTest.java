@@ -356,6 +356,7 @@ public class HyperJsonTest extends TestCase {
 
         // test data
         assertEquals("/api/users/1", friend.getHref().getPath());
+        assertEquals("Matt", friend.get("first_name"));
 
         // shut down the server
         server.shutdown();

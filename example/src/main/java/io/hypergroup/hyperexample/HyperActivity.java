@@ -65,7 +65,7 @@ public class HyperActivity extends Activity {
         if (TextUtils.isEmpty(keyPath)) {
             return mRoot.fetchAsync();
         } else {
-            return mRoot.getAsync(keyPath);
+            return mRoot.fetchAsync(keyPath);
         }
     }
 

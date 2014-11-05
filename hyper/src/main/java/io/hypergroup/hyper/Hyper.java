@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.concurrent.Callable;
 
 import bolts.Task;
-import io.hypergroup.hyper.HyperContext;
 import io.hypergroup.hyper.exception.DataParseException;
 import io.hypergroup.hyper.exception.IndexErrorException;
 import io.hypergroup.hyper.exception.InvalidCollectionException;
@@ -611,6 +610,33 @@ public abstract class Hyper {
             public Void call() throws Exception {
                 try {
                     result.setResult(fetch());
+                } catch (Exception ex) {
+                    result.setError(ex);
+                }
+                return null;
+            }
+        }, getContext().getAsyncExecutor());
+        return result.getTask();
+    }
+
+    /**
+     * Perform the fetch of a node's data at a keypath in the background.
+     *
+     * @return A task wrapping the get(keyPath).fetch() call that is run on the Hyper's context's async executor
+     * @see #fetch()
+     */
+    public Task<Hyper> fetchAsync(final String keyPath) {
+        final Task<Hyper>.TaskCompletionSource result = Task.create();
+        Task.call(new Callable<Void>() {
+            @Override
+            public Void call() throws Exception {
+                try {
+                    Hyper node = get(keyPath);
+                    if (node.getHref() != null) {
+                        result.setResult(node.fetch());
+                    } else {
+                        result.setResult(node);
+                    }
                 } catch (Exception ex) {
                     result.setError(ex);
                 }
