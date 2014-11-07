@@ -15,7 +15,7 @@ The API should ultimately allow for:
 
 At this stage in the development, prime-directive 1 is built for [hyper+json]. The syntax for creating and consuming Hyper API is as follows:
 
-```
+```java
 // creating a root node
 Hyper root = HyperJsons.createRoot(new URL("http://example.com/api/root"));
 
@@ -40,7 +40,7 @@ List<Hyper> users = scoreboard.get("users").each();
 
 There are a few methods to help you create root nodes in the `HyperJsons` class. For more information, check out the javadoc associated with each method.
 
-```
+```java
 // Create a root node using the default OkHttpClient with http-caching
 static Hyper createRoot(Context context, URL url)
 
@@ -59,7 +59,7 @@ You can create you own `HyperContext` which gives you more control over the beha
 
 The `HyperContext` is shared across all nodes that are created from the original node.
 
-```
+```java
 new HyperContext.Builder()
     .setHttpClient(myOkHttpClient)
     .setAsyncExecutor(myExecutor)
@@ -70,9 +70,9 @@ new HyperContext.Builder()
 
 There are a few more things you can do with your `Hyper` nodes. Besides acquiring information using `keyPaths`, you can also fetch collections and invalidate an item's data.
 
-You can also do a lot of this things on different threads.
+You can also do a lot of these things on different threads.
 
-```
+```java
 // Retrieve a property or a new node from a given key path. The magic here lies in the structure of the key path.
 // Using dot-notation, you can retrieve a deep node or property, or you can select individual items from a collection using a number instead of a name.
 // examples:
