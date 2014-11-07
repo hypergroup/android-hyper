@@ -57,14 +57,6 @@ public class HyperContext {
         mHttpClient = httpClient;
     }
 
-    public Executor getNetworkExecutor() {
-        return mNetworkExecutor;
-    }
-
-    public void setNetworkExecutor(Executor networkExecutor) {
-        mNetworkExecutor = networkExecutor;
-    }
-
     public Executor getAsyncExecutor() {
         return mAsyncExecutor;
     }
@@ -80,7 +72,6 @@ public class HyperContext {
 
         private Hyper mRoot;
         private OkHttpClient mHttpClient = null;
-        private Executor mNetworkExecutor = NETWORK_EXECUTOR;
         private Executor mAsyncExecutor = ASYNC_EXECUTOR;
 
         //private HyperCache mHyperCache;
@@ -102,15 +93,7 @@ public class HyperContext {
         }
 
         /**
-         * Override the default Network Executor
-         */
-        public Builder setNetworkExecutor(Executor networkExecutor) {
-            mNetworkExecutor = networkExecutor;
-            return this;
-        }
-
-        /**
-         * Override the default Fetch Executor
+         * Override the default async Executor pool
          */
         public Builder setAsyncExecutor(Executor AsyncExecutor) {
             mAsyncExecutor = AsyncExecutor;
@@ -120,7 +103,6 @@ public class HyperContext {
         public HyperContext build() {
             HyperContext context = new HyperContext();
             context.setRoot(mRoot);
-            context.setNetworkExecutor(mNetworkExecutor);
             context.setAsyncExecutor(mAsyncExecutor);
 
             OkHttpClient client = mHttpClient;
