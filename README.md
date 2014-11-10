@@ -70,7 +70,13 @@ new HyperContext.Builder()
 
 There are a few more things you can do with your `Hyper` nodes. Besides acquiring information using `keyPaths`, you can also fetch collections and invalidate an item's data.
 
-You can also do a lot of these things on different threads.
+All of the methods are well documented with javadoc, this is simply a brief summary of the methods available to you.
+
+You can also perform the property retrieval functions on new threads, usings Promises created with Bolts for Android
+
+ * `get` -> `getAsync`
+ * `fetch` -> `fetchAsync`
+ * `each` -> `eachAsync`
 
 ```java
 // Retrieve a property or a new node from a given key path. The magic here lies in the structure of the key path.
