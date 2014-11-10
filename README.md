@@ -11,7 +11,7 @@ The API should ultimately allow for:
 
 ## For Developers
 
-### Using [hyper+json], a cheatsheet
+#### Using [hyper+json], a cheatsheet
 
 At this stage in the development, prime-directive 1 is built for [hyper+json]. The syntax for creating and consuming Hyper API is as follows:
 
@@ -36,7 +36,7 @@ List<Hyper> users = scoreboard.get("users").each();
 
 ```
 
-### Creating Root Nodes Explained
+#### Creating Root Nodes Explained
 
 There are a few methods to help you create root nodes in the `HyperJsons` class. For more information, check out the javadoc associated with each method.
 
@@ -53,7 +53,7 @@ static Hyper createRoot(URL url)
 static Hyper createRoot(URL url, HyperContext hyperContext)
 ```
 
-### HyperContext explained
+#### HyperContext explained
 
 You can create you own `HyperContext` which gives you more control over the behavior of your hyper tree. Using the `Builder` pattern, you can create you own `HyperContext`.
 
@@ -66,7 +66,7 @@ new HyperContext.Builder()
 	.build();
 ```
 
-### Hyper node methods explained
+#### Hyper node methods explained
 
 There are a few more things you can do with your `Hyper` nodes. Besides acquiring information using `keyPaths`, you can also fetch collections and invalidate an item's data.
 
@@ -139,7 +139,7 @@ String getConcatenatedKeyPath(String keyPath)
 
 To those contributing or planning to work on this project, a brief description of the architecture may be helpful.
 
-A Hyper node is a virtual node that wraps data. When accessing data that doesn't exist, it uses HyperContext to `fetch` that data.
+A Hyper node is a virtual node that wraps data. When accessing data that doesn't exist, it uses contextual variables from HyperContext to `fetch` that data.
 
 The `get` method retrieves the next property in the `keyPath`. If there is more keyPath to `get` then the call is made recursively.
 
@@ -150,12 +150,20 @@ At this time there are only two implemented keywords:
  1. `collection`
  2. `href`
 
-When contributing, be sure to write your unit tests.
+When contributing, be sure to write your unit tests and documentation.
 
+
+##### Future tasks
+
+ 1. Set property values on nodes
+ 2. Implement pattern for propogating change events
+ 3. Easy android binding implementation
+ 4. Forms implementation?
+ 5. Paging implementation?
 
 ## Also included
 
-In this repository, there is an example application that exists as a hyper-tree browser. You can dril down through a hyper tree's `keyPaths` and examine its contents.
+In this repository, there is an example application that exists as a hyper-tree browser. You can drill down through a hyper tree's `keyPaths` and examine its contents.
 
 [hyper+json]:https://github.com/hypergroup/hyper-json
 
